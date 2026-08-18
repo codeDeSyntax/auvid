@@ -60,7 +60,7 @@ const run = (cmd) => execSync(cmd, { stdio: "inherit" });
 run("git add -A");
 run(`git commit -m "chore: release v${version} — ${message}"`);
 run(`git tag v${version}`);
-run("git push");
+run("git push origin main");
 run(`git push origin v${version}`);
 
 console.log(`\nReleased v${version}. GitHub Actions will build & publish.`);
