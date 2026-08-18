@@ -25,6 +25,7 @@ import { VideoEditor } from "@/components/VideoEditor/VideoEditor";
 import { VideoCompressor } from "@/components/VideoCompressor/VideoCompressor";
 import { FormatConverter } from "@/components/FormatConverter/FormatConverter";
 import { SoundRecorder } from "@/components/SoundRecorder/SoundRecorder";
+import { getAssetPath } from "@/utils/assets";
 
 /* ─────────────────────────── Tool card data ─────────────────────────── */
 interface ToolCard {
@@ -41,51 +42,51 @@ const TOOLS: ToolCard[] = [
     key: "audio-compress",
     title: "Audio Compressor",
     subtitle: "Reduce file size while preserving quality — MP3, WAV, FLAC, AAC",
-    imageLight: "/cards/light/audio-compressor.jpg",
-    imageDark: "/cards/dark/audio-compressor.jpg",
+    imageLight: getAssetPath("cards/light/audio-compressor.jpg"),
+    imageDark: getAssetPath("cards/dark/audio-compressor.jpg"),
     badge: "Ready",
   },
   {
     key: "video-compress",
     title: "Video Compressor",
     subtitle: "Compress MP4, MKV, MOV — resize, re-encode, and shrink to kilobytes",
-    imageLight: "/cards/light/video-compressor.jpg",
-    imageDark: "/cards/dark/video-compressor.jpg",
+    imageLight: getAssetPath("cards/light/video-compressor.jpg"),
+    imageDark: getAssetPath("cards/dark/video-compressor.jpg"),
   },
   {
     key: "audio-trim",
     title: "Audio Trimmer & Editor",
     subtitle: "Cut clips, fade in/out, normalize gain — with waveform preview",
-    imageLight: "/cards/light/audio-trim.jpg",
-    imageDark: "/cards/dark/audio-trim.jpg",
+    imageLight: getAssetPath("cards/light/audio-trim.jpg"),
+    imageDark: getAssetPath("cards/dark/audio-trim.jpg"),
   },
   {
     key: "video-cut",
     title: "Video Editor & Cutter",
     subtitle: "Lossless cut, scene split, audio stream extraction",
-    imageLight: "/cards/light/video-editor.jpg",
-    imageDark: "/cards/dark/video-editor.jpg",
+    imageLight: getAssetPath("cards/light/video-editor.jpg"),
+    imageDark: getAssetPath("cards/dark/video-editor.jpg"),
   },
   {
     key: "converter",
     title: "Format Converter",
     subtitle: "Convert between any audio & video formats, extract audio, create GIFs",
-    imageLight: "/cards/light/format-converter.jpg",
-    imageDark: "/cards/dark/format-converter.jpg",
+    imageLight: getAssetPath("cards/light/format-converter.jpg"),
+    imageDark: getAssetPath("cards/dark/format-converter.jpg"),
   },
   {
     key: "metadata",
     title: "Metadata Editor",
     subtitle: "Edit ID3 tags, artwork, and media properties in bulk",
-    imageLight: "/cards/light/metadata-editor.jpg",
-    imageDark: "/cards/dark/metadata-editor.jpg",
+    imageLight: getAssetPath("cards/light/metadata-editor.jpg"),
+    imageDark: getAssetPath("cards/dark/metadata-editor.jpg"),
   },
   {
     key: "recorder",
     title: "Sound Recorder",
     subtitle: "Capture high-efficiency voice notes (~20 KB per 10s), live waveform & timers",
-    imageLight: "/cards/light/sound-recorder.jpg",
-    imageDark: "/cards/dark/sound-recorder.jpg",
+    imageLight: getAssetPath("cards/light/sound-recorder.jpg"),
+    imageDark: getAssetPath("cards/dark/sound-recorder.jpg"),
   },
 ];
 
@@ -135,7 +136,7 @@ const PlaceholderPanel: React.FC<{
             style={{ backgroundColor: accentColor }}
           />
           <img
-            src="/empty-trimmer.png"
+            src={getAssetPath("empty-trimmer.png")}
             alt={title}
             className="relative w-44 h-44 object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-xl"
           />
@@ -436,7 +437,7 @@ export const AuvidWorkspace: React.FC = () => {
                       style={{ backgroundColor: accentColor }}
                     />
                     <img
-                      src="/empty-trimmer.png"
+                      src={getAssetPath("empty-trimmer.png")}
                       alt="Empty Workspace"
                       className="relative w-12 h-12 object-contain transition-transform group-hover:scale-105"
                     />
@@ -512,7 +513,7 @@ export const AuvidWorkspace: React.FC = () => {
                       style={{ backgroundColor: accentColor }}
                     />
                     <img
-                      src="/empty-trimmer.png"
+                      src={getAssetPath("empty-trimmer.png")}
                       alt="No outputs"
                       className="relative w-12 h-12 object-contain transition-transform group-hover:scale-105 opacity-80"
                     />

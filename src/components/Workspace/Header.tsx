@@ -10,6 +10,8 @@ import { useTheme } from "@/Provider/Theme";
 import { useMediaContext } from "@/Provider/MediaContext";
 import UpdateManager from "@/shared/UpdateManager";
 
+import { getAssetPath } from "@/utils/assets";
+
 export const Header: React.FC = () => {
   const { isDarkMode, toggleDarkMode, accentColor } = useTheme();
   const { handleMinimize, handleMaximize, handleClose } = useMediaContext();
@@ -23,7 +25,7 @@ export const Header: React.FC = () => {
       {/* Brand */}
       <div className="flex items-center space-x-2.5 no-drag">
         <img
-          src="/icon.png"
+          src={getAssetPath("icon.png")}
           alt="AUVID"
           className="w-7 h-7 rounded-lg shadow-sm object-contain"
         />

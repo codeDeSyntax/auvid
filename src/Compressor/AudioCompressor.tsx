@@ -11,6 +11,7 @@ import { AudioSettingsPanel } from './AudioSettingsPanel';
 import { AudioComparisonPlayer } from '@/components/Player/AudioComparisonPlayer';
 import { CompressConfirmModal } from './CompressConfirmModal';
 import { AudioFileEntry } from '@/types/audioCompressor';
+import { getAssetPath } from '@/utils/assets';
 
 // ─── Supported format chips ────────────────────────────────────────────────────
 const FORMAT_CHIPS = ['MP3', 'WAV', 'FLAC', 'AAC', 'M4A', 'OGG', 'OPUS', 'WMA', 'AC3', 'AIFF', 'ALAC'];
@@ -226,7 +227,7 @@ export const AudioCompressor: React.FC = () => {
                     style={{ backgroundColor: 'var(--accent)' }}
                   />
                   <img
-                    src="/empty-trimmer.png"
+                    src={getAssetPath("empty-trimmer.png")}
                     alt="Audio Compressor"
                     className="relative w-40 h-40 object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-xl"
                   />

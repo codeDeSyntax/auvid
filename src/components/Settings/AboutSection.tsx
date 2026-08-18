@@ -1,5 +1,6 @@
 import React from "react";
 import { Info, Cpu, HardDrive, ShieldCheck } from "lucide-react";
+import { getAssetPath } from "@/utils/assets";
 
 export const AboutSection: React.FC<{ accentColor: string }> = ({ accentColor }) => (
   <div className="space-y-6">
@@ -16,7 +17,7 @@ export const AboutSection: React.FC<{ accentColor: string }> = ({ accentColor })
     <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-900/60 p-6 backdrop-blur-sm shadow-xs">
       <div className="flex items-center space-x-4 mb-6">
         <img
-          src="/icon.png"
+          src={getAssetPath("icon.png")}
           alt="AUVID"
           className="w-14 h-14 rounded-2xl shadow-md object-contain"
         />

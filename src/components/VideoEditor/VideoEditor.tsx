@@ -18,6 +18,7 @@ import { useTheme } from '@/Provider/Theme';
 import { VideoTimeline, formatTime, formatDurationHuman } from './VideoTimeline';
 import { VideoTrimConfirmModal } from './VideoTrimConfirmModal';
 import type { VideoRegion } from './VideoTimeline';
+import { getAssetPath } from '@/utils/assets';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 export interface VideoFile {
@@ -659,7 +660,7 @@ export const VideoEditor: React.FC = () => {
                   style={{ backgroundColor: accentColor }}
                 />
                 <img
-                  src="/empty-trimmer.png"
+                  src={getAssetPath("empty-trimmer.png")}
                   alt="Video Editor"
                   className="relative w-44 h-44 object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-xl"
                 />

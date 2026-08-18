@@ -17,6 +17,7 @@ import { WaveformCanvas, formatTime, formatDurationHuman } from './WaveformCanva
 import { useWaveformDecoder, filePathToMediaUrl, ensurePlaybackBuffer, getSharedAudioContext } from './useWaveformDecoder';
 import { AudioTrimConfirmModal } from './AudioTrimConfirmModal';
 import type { WaveformRegion, WaveformFades } from './WaveformCanvas';
+import { getAssetPath } from '@/utils/assets';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface TrimFile {
@@ -613,7 +614,7 @@ export const AudioTrimmer: React.FC = () => {
                     style={{ backgroundColor: accentColor }}
                   />
                   <img
-                    src="/empty-trimmer.png"
+                    src={getAssetPath("empty-trimmer.png")}
                     alt="Audio Trimmer"
                     className="relative w-44 h-44 object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-xl"
                   />

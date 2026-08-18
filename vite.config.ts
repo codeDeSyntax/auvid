@@ -23,6 +23,7 @@ export default defineConfig(({ command }) => {
     : undefined;
 
   return {
+    base: "./",
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
     },

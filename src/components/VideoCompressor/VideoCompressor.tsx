@@ -14,6 +14,7 @@ import { VideoFileRow } from './VideoFileRow';
 import { VideoSettingsPanel } from './VideoSettingsPanel';
 import { VideoCompressConfirmModal } from './VideoCompressConfirmModal';
 import { VideoCompressFileEntry } from '@/types/videoCompressor';
+import { getAssetPath } from '@/utils/assets';
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 B';
@@ -182,7 +183,7 @@ export const VideoCompressor: React.FC = () => {
                 style={{ backgroundColor: accentColor }}
               />
               <img
-                src="/empty-trimmer.png"
+                src={getAssetPath("empty-trimmer.png")}
                 alt="Video Compressor"
                 className="relative w-44 h-44 object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-xl"
               />

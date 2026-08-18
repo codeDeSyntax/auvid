@@ -18,6 +18,7 @@ import {
   AUDIO_FORMATS,
   VIDEO_FORMATS,
 } from '@/types/formatConverter';
+import { getAssetPath } from '@/utils/assets';
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 B';
@@ -182,7 +183,7 @@ export const FormatConverter: React.FC = () => {
                 style={{ backgroundColor: accentColor }}
               />
               <img
-                src="/empty-trimmer.png"
+                src={getAssetPath("empty-trimmer.png")}
                 alt="Format Converter"
                 className="relative w-44 h-44 object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-xl"
               />

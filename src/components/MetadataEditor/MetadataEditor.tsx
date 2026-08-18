@@ -19,7 +19,9 @@ import {
   Check,
   AlertCircle,
   FileAudio2,
+  ExternalLink,
 } from 'lucide-react';
+import { getAssetPath } from '@/utils/assets';
 import { useTheme } from '@/Provider/Theme';
 import { CustomDropdown, DropdownOption } from '@/components/common/CustomDropdown';
 
@@ -443,7 +445,7 @@ export const MetadataEditor: React.FC = () => {
                     style={{ backgroundColor: accentColor }}
                   />
                   <img
-                    src="/empty-trimmer.png"
+                    src={getAssetPath("empty-trimmer.png")}
                     alt="No files"
                     className="relative w-24 h-24 object-contain transition-transform group-hover:scale-105"
                   />
@@ -549,7 +551,7 @@ export const MetadataEditor: React.FC = () => {
                   style={{ backgroundColor: accentColor }}
                 />
                 <img
-                  src="/empty-trimmer.png"
+                  src={getAssetPath("empty-trimmer.png")}
                   alt="Metadata Editor"
                   className="relative w-44 h-44 object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-xl"
                 />
