@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>His Voice</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        width: 100vw;
+        height: 100vh;
+        background: #1a1614;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        overflow: hidden;
+        user-select: none;
+        -webkit-app-region: drag;
+      }
+
+      .logo-wrap {
+        position: relative;
+        margin-bottom: 24px;
+        animation: float 3s ease-in-out infinite;
+      }
+
+      .logo {
+        width: 110px;
+        height: 110px;
+        border-radius: 50%;
+        object-fit: cover;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+      }
+
+      .glow-ring {
+        position: absolute;
+        inset: -8px;
+        border-radius: 50%;
+        background: conic-gradient(
+          from 0deg,
+          rgba(180, 120, 60, 0),
+          rgba(200, 140, 80, 0.6),
+          rgba(180, 120, 60, 0)
+        );
+        animation: spin 3s linear infinite;
+        z-index: -1;
+      }
+
+      .app-name {
+        color: rgba(255, 255, 255, 0.92);
+        font-size: 28px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        margin-bottom: 8px;
+      }
+
+      .tagline {
+        color: rgba(255, 255, 255, 0.35);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        margin-bottom: 44px;
+      }
+
+      .loader-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        width: 200px;
+        animation: fadeIn 0.5s ease-out 0.35s both;
+      }
+
+      .loader-track {
+        width: 100%;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 99px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .loader-bar {
+        position: absolute;
+        height: 100%;
+        width: 40%;
+        background: linear-gradient(
+          90deg,
+          rgba(232, 201, 104, 0.1),
+          rgba(232, 201, 104, 1),
+          rgba(232, 201, 104, 0.1)
+        );
+        border-radius: 99px;
+        left: -40%;
+        animation: loading-slide 1.6s cubic-bezier(0.65, 0.05, 0.36, 1) infinite;
+        box-shadow: 0 0 10px rgba(232, 201, 104, 0.6);
+      }
+
+      .loader-status {
+        color: rgba(255, 255, 255, 0.4);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-8px);
+        }
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes loading-slide {
+        0% {
+          left: -40%;
+        }
+        50% {
+          width: 50%;
+        }
+        100% {
+          left: 100%;
+        }
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 0.4; }
+        50% { opacity: 1; }
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .logo-wrap,
+      .app-name,
+      .tagline,
+      .loader-container {
+        animation-fill-mode: both;
+      }
+      .logo-wrap {
+        animation:
+          float 3s ease-in-out infinite,
+          fadeIn 0.5s ease-out;
+      }
+      .app-name {
+        animation: fadeIn 0.5s ease-out 0.15s both;
+      }
+      .tagline {
+        animation: fadeIn 0.5s ease-out 0.25s both;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="logo-wrap">
+      <div class="glow-ring"></div>
+      <img class="logo" src="./icon.png" alt="AUVID" />
+    </div>
+    <div class="app-name">AUVID</div>
+    <div class="tagline">Audio &amp; Video Manipulation Studio</div>
+    <div class="loader-container">
+      <div class="loader-track">
+        <div class="loader-bar"></div>
+      </div>
+      <div class="loader-status">Initializing Studio Engine...</div>
+    </div>
+  </body>
+</html>

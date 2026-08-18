@@ -1,0 +1,143 @@
+================================================================================
+                           AUVID STUDIO PROJECT SUMMARY
+================================================================================
+Generated Date: 2026-08-18
+Application Name: AUVID Studio (audvid)
+Version: 1.0.0
+Description: High-Performance Audio & Video Manipulation Desktop Application
+
+IMPORTANT NOTE FOR CONTINUING CHATS:
+- "Hisvoice" was a legacy project (sermon database/PDF app) that is COMPLETELY DEPRECATED AND NO LONGER NEEDED.
+- We are currently and exclusively working on AUVID (audvid), an all-in-one desktop workstation for audio and video media manipulation.
+- Do NOT re-introduce any sermon, PDF, or Hisvoice legacy code or features.
+
+--------------------------------------------------------------------------------
+1. TECH STACK & ARCHITECTURE
+--------------------------------------------------------------------------------
+- Framework: Electron (v29.1.1) + React (v18.3.1) + Vite (v6.1.0) + TypeScript (v5.4.2)
+- Styling: Tailwind CSS, Vanilla CSS, Ant Design Icons (@ant-design/icons), Lucide React, Framer Motion
+- Media Engine: 100% Local processing via fluent-ffmpeg (v2.1.3), ffmpeg-static (v5.3.0), ffprobe-static (v3.1.0). Zero cloud dependency, fully private & offline.
+- Waveform Engine: High-performance single-pass Web Audio decoding with persistent IndexedDB peak caching (< 5ms instant load), in-memory LRU cache (25 items), and adjacent track prefetching.
+- Custom Protocol: Privileged scheme `media://` registered in Electron main process for streaming local media files to renderer components.
+- Package Manager: npm / pnpm
+
+--------------------------------------------------------------------------------
+2. PROJECT CLEANUP & LEGACY STATUS
+--------------------------------------------------------------------------------
+- Legacy Code ("Hisvoice"): Completely removed/cleaned out from the repository.
+- Active Project: AUVID Studio — a modern, dark/light themed multimedia workstation for audio compression, audio trimming/editing, ID3 metadata editing, video cutting/compression, and studio recording.
+
+--------------------------------------------------------------------------------
+3. REPOSITORY STRUCTURE (audvid/)
+--------------------------------------------------------------------------------
+j:/electron/AUVID/audvid/
+├── electron/
+│   ├── main/
+│   │   ├── index.ts               - Electron main process, window management, custom media:// protocol, IPC setup
+│   │   ├── audioCompressor.ts     - Audio compression backend (FFmpeg probing, quality/bitrate modes, staging & save)
+│   │   ├── audioTrimmer.ts        - Audio region trimming backend (seek, trim, volume gain, fade-in/fade-out, overwrite/new file)
+│   │   ├── metadataEditor.ts      - ID3 / container metadata reader & writer, artwork extractor via FFprobe & FFmpeg
+│   │   ├── fonts.ts               - System font scanner
+│   │   └── update.ts              - Auto-updater bridge
+│   └── preload/
+│       └── index.ts               - Preload script exposing window.api and window.ipcRenderer
+├── src/
+│   ├── App.tsx                    - Main layout (Header + Sidebar + AuvidWorkspace)
+│   ├── Provider/
+│   │   ├── MediaContext.tsx       - Global state for active tool, uploaded media queue, output history
+│   │   └── Theme.tsx              - Dark/Light mode, accent color system, custom UI fonts
+│   ├── components/
+│   │   ├── Workspace/
+│   │   │   ├── AuvidWorkspace.tsx - Dashboard, suite cards, tabbed Uploaded Media vs Recent Outputs views
+│   │   │   ├── Header.tsx         - Custom frameless title bar with drag region & min/max/close controls
+│   │   │   └── Sidebar.tsx        - Left navigation menu for tools and settings
+│   │   ├── AudioTrimmer/
+│   │   │   ├── AudioTrimmer.tsx   - Interactive audio trimmer UI (waveforms, 3-marker controls, loops, fade, gain, export)
+│   │   │   ├── WaveformCanvas.tsx - HTML5 Canvas waveform drawing component with 3 distinct markers (In, Out, Playhead)
+│   │   │   └── useWaveformDecoder.ts - Ultra-fast decoder with IndexedDB persistent peak cache and in-memory LRU cache
+│   │   ├── MetadataEditor/
+│   │   │   └── MetadataEditor.tsx - Audio & Video metadata tag editor (title, artist, album, artwork, etc.)
+│   │   └── Settings/
+│   │       ├── SettingsPage.tsx   - Settings root container
+│   │       ├── AppearanceSection.tsx - Theme, Accent color, Font selection
+│   │       └── AboutSection.tsx   - AUVID system & engine specifications
+│   ├── Compressor/
+│   │   ├── AudioCompressor.tsx    - Batch audio compressor workspace
+│   │   ├── AudioFileRow.tsx       - Per-file compression row with staging preview
+│   │   ├── AudioSettingsPanel.tsx - Bitrate, VBR/CBR, Target Size, Sample Rate, Channel mode settings
+│   │   ├── CompressConfirmModal.tsx - Save confirmation modal
+│   │   └── useAudioCompressor.ts  - Compression IPC hook
+│   ├── types/
+│   │   ├── index.ts               - Core TypeScript interfaces (MediaItem, OutputFile, MediaTool)
+│   │   └── audioCompressor.ts     - Audio compression types
+│   └── index.css                  - App styling, animations & scrollbar definitions
+
+--------------------------------------------------------------------------------
+4. FULLY IMPLEMENTED AUVID SUITES
+--------------------------------------------------------------------------------
+[✓] Dashboard & Workstation Container:
+    - Interactive tool launcher cards with dark/light visual banners
+    - Tabbed single-view bottom container switching between Uploaded Media and Recent Outputs
+    - Dynamic contextual action buttons (Clear All, Add File, Open Folder, Clear History)
+    - Output history list with native "Show in File Explorer"
+    - Custom frameless window controls (minimize, maximize, close)
+
+[✓] Audio Compressor:
+    - Supports MP3, AAC, WAV, FLAC, OGG, OPUS, M4A
+    - Modes: Quality Level, Target Bitrate, Target Output File Size (MB), Percentage Reduction
+    - Custom sample rates (22.05kHz to 96kHz) & Mono/Stereo switching
+    - Side-by-side original vs compressed audio comparison player
+    - Staging preview workflow before final export/saving to disk
+
+[✓] Audio Trimmer & Editor:
+    - HTML5 Canvas visual waveform renderer with 3 interactive markers:
+        * Green marker: Selection In Point
+        * Blue marker: Selection Out Point
+        * Purple marker: Current playback point (drags & seeks seamlessly)
+    - High-speed waveform decoding with IndexedDB persistent peak caching (< 5ms)
+    - Precision timestamp In/Out trim markers & HH:MM:SS.d timecode display
+    - Single-file upload & track-by-track queueing
+    - Fade-in & Fade-out duration controls
+    - Volume gain multiplier (0.1x to 3.0x)
+    - Export options: Save Selection as New File or Crop & Overwrite Original File
+
+[✓] Metadata Editor:
+    - ID3 and container metadata editor for audio & video files
+    - Fields: Title, Artist, Album, Album Artist, Composer, Year, Genre, Track #, Disc #, Comment
+    - Cover Art extraction from existing files & image replacement/upload
+    - Batch folder listing & single file editing
+
+[✓] Settings & Themes:
+    - Light / Dark mode toggle with smooth CSS theme transitions
+    - Curated accent colors (Cyan, Indigo, Emerald, Amber, Rose, Violet, etc.)
+    - UI Font switcher (Outfit, Inter, Roboto, System default)
+    - Custom output directory selector
+
+--------------------------------------------------------------------------------
+5. NEXT STEPS & FUTURE TASKS
+--------------------------------------------------------------------------------
+1. Video Editor & Cutter (`video-cut` suite):
+   - Build Video Editor component replacing `PlaceholderPanel` in `AuvidWorkspace.tsx`.
+   - Add lossless video cutting (`ffmpeg -ss -to -c copy`).
+   - Add timeline video frame preview & scene splitting.
+   - Add Audio Stream Extraction (extract audio tracks from videos to MP3/AAC).
+
+2. Video Compressor (`converter` suite):
+   - Build Video Compressor component & Electron main engine (`videoCompressor.ts`).
+   - H.264 / H.265 / AV1 / VP9 codec support, CRF quality control, resolution downscaling (1080p, 720p, 480p), hardware acceleration (NVENC, QuickSync, AMF).
+
+3. Studio Recorder (`recorder` suite):
+   - Build Live Audio Recorder using Web Audio API / MediaRecorder.
+   - Real-time VU volume meter and direct WAV/MP3 recording to disk.
+
+4. Release Build & Packaging:
+   - Run `npm run dist` (`electron-builder`) to confirm production executables bundle static FFmpeg binaries properly.
+
+--------------------------------------------------------------------------------
+6. RUNNING THE PROJECT
+--------------------------------------------------------------------------------
+- Dev mode: `npm run dev` (runs Vite dev server + Electron)
+- Build: `npm run build`
+- Distribute executable: `npm run dist`
+
+================================================================================

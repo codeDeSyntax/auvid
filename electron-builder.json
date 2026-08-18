@@ -1,0 +1,39 @@
+{
+  "appId": "com.auvid.app",
+  "productName": "AUVID",
+  "asar": true,
+  "directories": {
+    "output": "release/${version}"
+  },
+  "files": [
+    "dist-electron",
+    "dist"
+  ],
+  "win": {
+    "icon": "public/icon.png",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "artifactName": "${productName}_${version}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "allowElevation": true,
+    "deleteAppDataOnUninstall": false,
+    "include": "build/installer.nsh"
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "codeDeSyntax",
+    "repo": "auvid",
+    "releaseType": "release"
+  }
+}
+

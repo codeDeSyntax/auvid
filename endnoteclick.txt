@@ -1,0 +1,352 @@
+# Endnote Click-to-Fetch System — Implementation Guide
+
+A complete reference for how tappable endnotes work in the HisVoice app, with enough detail to replicate the pattern in any platform (desktop, web, etc.).
+
+---
+
+## 1. Raw Data Format
+
+Endnotes are embedded inline in sermon paragraph text. They look like this:
+
+```
+Endnote: 56-0527 - At Kadesh-Barnea William Marrion Branham 130 THE PEOPLE, AT THE HOUR OF DECISION NOW!
+```
+
+**Structure breakdown:**
+
+| Segment | Example | Required? |
+|---|---|---|
+| Literal marker | `Endnote:` | Yes — detection anchor |
+| DateCode | `56-0527` or `53-1213E` | Optional (some endnotes lack it) |
+| Dash separator | `-` | Present when dateCode exists |
+| Title | `At Kadesh-Barnea` | Optional |
+| Fixed author string | `William Marrion Branham` | Usually present |
+| Paragraph number | `130` | Optional |
+| Quote text | `THE PEOPLE, AT THE HOUR OF DECISION NOW!` | Optional |
+
+An endnote can span multiple lines within the same paragraph block.
+
+---
+
+## 2. Parsing (endnoteParser.js)
+
+One function: `parseEndnote(fullParagraphText)` → returns `null` or a structured object.
+
+### Step-by-step logic
+
+```
+1. Guard:  if text does not include "Endnote:" → return null
+
+2. Extract: regex  /Endnote:\s*([\s\S]+?)(?=\n\s*\n|$)/
+   Captures everything after "Endnote:" until a blank line or end-of-string.
+   Fallback regex: /Endnote:\s*(.+)/
+
+3. DateCode: regex  /^(\d{2}-\d{4}[A-Za-z]?)\s*-\s*/
+   e.g. "56-0527" or "53-1213E"
+   Strip match from remainder.
+
+4. Title: text before indexOf("William Marrion Branham")
+   Strip "William Marrion Branham" from remainder.
+
+5. Paragraph: regex  /^(\d+)/  on remainder
+   First number after the author name.
+
+6. Quote — three derived formats from the remaining words:
+
+   a) longQuote  — first 8 words, lowercased, punctuation kept
+                   → used for ExactPhrase search (precise)
+   
+   b) keywords   — all words minus 60+ stop words, max 3 words, 
+                   stripped of leading/trailing punctuation
+                   → used for AllWords search (broad)
+   
+   c) quote      — first 5 words, lowercased (legacy compat)
+```
+
+### Output object
+
+```js
+{
+  datecode:    "56-0527"   | null,
+  title:       "At Kadesh-Barnea" | null,
+  paragraph:   "130"       | null,
+  quote:       "the people, at the hour"  | null,   // 5-word legacy
+  longQuote:   "the people, at the hour of decision now!" | null, // 8-word
+  keywords:    "people decision"  | null,   // stop-words removed, max 3
+  fullEndnote: "<original raw text>"
+}
+```
+
+---
+
+## 3. Rendering Endnote Paragraphs (ParagraphText.jsx)
+
+When rendering each sermon paragraph:
+
+### Detection
+
+```js
+const isEndnote = paragraph.includes("Endnote:");
+const hasAuthor = paragraph.includes("William Marrion Branham");
+```
+
+Three render types:
+- `"endnote_with_title"` — full endnote with datecode/title/author
+- `"endnote"` — only the word "Endnote" is present
+- `"normal"` — regular text (no special treatment)
+
+### Visual Treatment
+
+| Text segment | Style |
+|---|---|
+| "Endnote" keyword | Underlined, colored (#f0b38b dark / #7a3b10 light), tappable |
+| DateCode + Title | Underlined, tappable |
+| "William Marrion Branham" | Bold, underlined, tappable |
+| Blinking pointing finger 👉 | Animated opacity pulse (520ms cycle) after author name |
+| Quote text remainder | Normal text style |
+
+The entire endnote region is wrapped in a `TouchableOpacity` (or equivalent) that calls `handleEndnoteClick`.
+
+### Click Handler
+
+```js
+const handleEndnoteClick = () => {
+  const endnoteData = parseEndnote(paragraphText);
+  if (endnoteData) {
+    onEndnoteClick(endnoteData, paragraphIndex, currentSermon);
+  }
+};
+```
+
+This passes the parsed endnote data up to the parent screen.
+
+---
+
+## 4. API Layer (branhamApi.js)
+
+**Base URL**: `https://table.branham.org/rest`
+
+### 4a. Primary Search — POST `/userQuery`
+
+```json
+// REQUEST
+{
+  "Language": "en",
+  "SearchType": "ExactPhrase",       // or "AllWords"
+  "Text": "the people, at the hour of decision now!",
+  "PageSize": 50
+}
+```
+
+```json
+// RESPONSE
+{
+  "Status": "Successful",
+  "Result": {
+    "TotalHits": 24,
+    "PageSize": 50,
+    "Results": [
+      {
+        "RecordId": "unique-id",
+        "DocumentRecordId": "620B0009",
+        "Properties": {
+          "DateCode": "56-0527",
+          "Title": "At Kadesh-Barnea",
+          "Paragraph": "130",          // can be range: "130-135"
+          "Fragment": "<p>Text with <span class=\"hit-snippet-highlight\">matched</span> words</p>"
+        }
+      }
+    ]
+  }
+}
+```
+
+### 4b. Sermon Index — POST `/index/allSermons`
+
+Maps datecodes to numeric IDs. Cached in-memory after first call.
+
+```json
+// REQUEST
+{ "Language": "en" }
+
+// RESPONSE
+{
+  "Result": {
+    "Sermons": [
+      { "p": "56-0527", "i": 12345 },
+      ...
+    ]
+  }
+}
+```
+
+### 4c. Full Sermon Content — POST `/sermons/sermonRequest`
+
+Used when user expands a result to read the full context.
+
+```json
+// REQUEST (by numeric ID)
+{
+  "Language": "en",
+  "SermonProductIdentityId": 12345,
+  "GetAllContent": true,
+  "HighlightQuery": null
+}
+
+// REQUEST (by record ID string)
+{
+  "Language": "en",
+  "SermonRecordId": "620B0009",
+  "GetAllContent": true,
+  "HighlightQuery": null
+}
+
+// RESPONSE
+{
+  "Status": "Successful",
+  "Result": {
+    "Sections": [
+      {
+        "Paragraph": "130",       // or "header", or range "130-135"
+        "Content": "Plain text of the paragraph...",
+        "IsHit": true             // whether this matched the search
+      }
+    ]
+  }
+}
+```
+
+---
+
+## 5. Search Strategy & Fallback Chain
+
+`searchEndnoteQuote(endnoteData)` orchestrates a multi-step search:
+
+```
+1. PRIMARY — ExactPhrase search using longQuote (8 words)
+   ✓ results found? → enhance with paragraph-context results → return
+   
+2. FALLBACK 1 — AllWords search using keywords (3 stripped words)
+   ✓ results found? → return
+   
+3. FALLBACK 2 — Paragraph reference search
+   Search by datecode/title, then filter results to ±2 paragraphs
+   of the target paragraph number.
+   
+4. ALL FAILED → throw error
+```
+
+When the primary search succeeds AND a datecode+paragraph exist, results are **enhanced**: a second query fetches the source sermon by datecode, filters to ±2 paragraphs around the target, and the merged results are sorted so the source sermon appears first.
+
+---
+
+## 6. Displaying Results (EndnoteResults.jsx)
+
+### Grouping
+
+Results are grouped by sermon (using `DocumentRecordId` + `DateCode` + `Title`). The group matching the endnote's own datecode/title is marked as the **primary match** and shown first.
+
+### Expand → Full Content
+
+When the user taps a result to expand it:
+1. Call `getSermonContent(sermonId)` to fetch all `Sections`
+2. Find the best-matching section (by paragraph number or `IsHit: true`)
+3. Show a **context window**: 3 paragraphs before and 50 after the match (25 for secondary results)
+4. Highlight matching terms with regex-based background color
+
+### Highlight Logic
+
+```js
+// Build regex from search words
+const terms = searchText.split(/\s+/).filter(w => w.length > 2);
+const regex = new RegExp(`(${terms.join("|")})`, "gi");
+
+// Apply to each paragraph's text
+text.replace(regex, '<highlight>$1</highlight>');
+```
+
+Highlighted text gets a colored background + distinct text color per theme.
+
+---
+
+## 7. State Flow — Complete Sequence
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  User taps endnote text in ParagraphText                │
+│    ↓                                                    │
+│  parseEndnote(paragraph) → endnoteData object           │
+│    ↓                                                    │
+│  onEndnoteClick(endnoteData) bubbles to CurrentSermon   │
+│    ↓                                                    │
+│  CurrentSermon sets state:                              │
+│    setEndnoteData(data)                                 │
+│    setShowEndnoteSheet(true)                            │
+│    ↓                                                    │
+│  EndnoteResults sheet slides up (animated)              │
+│    ↓                                                    │
+│  Component calls searchEndnoteQuote(endnoteData)        │
+│    ↓                                                    │
+│  API: POST /userQuery (ExactPhrase with 8-word quote)   │
+│    ↓  (fallback chain if no results)                    │
+│  Results grouped by sermon, primary match flagged        │
+│    ↓                                                    │
+│  User taps a result → expand                            │
+│    ↓                                                    │
+│  API: POST /sermons/sermonRequest (full content)        │
+│    ↓                                                    │
+│  Filter to context window, highlight terms, display     │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 8. Porting to a Desktop App
+
+To replicate this system in an Electron / Tauri / WPF / Qt / JavaFX app:
+
+### What you need
+
+| Component | Mobile (React Native) | Desktop equivalent |
+|---|---|---|
+| Text renderer | `<Text>` with nested `<Text onPress>` | Rich text view with clickable spans (e.g. HTML `<a>`, WPF `Hyperlink`, Qt `QTextBrowser`) |
+| Endnote detection | String includes `"Endnote:"` | Same logic — pure string check |
+| Parser | `parseEndnote()` | Port the function 1:1 (regex is platform-agnostic) |
+| Click handler | React `onPress` callback | Click/href event handler |
+| API calls | `fetch()` POST | `fetch` / `HttpClient` / `axios` — same REST endpoints |
+| Results display | Bottom sheet / modal | Side panel, dialog, or split view |
+| Expand full content | Second API call | Same — call `/sermons/sermonRequest` |
+| Highlighting | Regex replace on plain text | Regex replace → HTML `<mark>` or rich text spans |
+
+### Porting steps
+
+1. **Copy `parseEndnote()`** — it's pure JS with no React dependencies. Works in Node, browser, or any JS runtime. For non-JS languages, port the regex chain.
+
+2. **Copy `branhamApi.js`** — the three API functions (`searchSermons`, `getSermonContent`, `searchEndnoteQuote`) are pure `fetch` calls. No framework dependency.
+
+3. **Render sermon text with detection** — when rendering each paragraph:
+   - Check `text.includes("Endnote:")`
+   - If yes, split the paragraph into segments (before "Endnote:", the endnote keyword, datecode+title, author, quote) and render the endnote segments as clickable/styled spans
+   - Attach a click handler that calls `parseEndnote(text)` then triggers the search flow
+
+4. **Build a results panel** — when the click fires:
+   - Call `searchEndnoteQuote(parsedData)` 
+   - Group results by `DocumentRecordId`
+   - Display as expandable list (sermon title → paragraph snippets)
+   - On expand, call `getSermonContent(id)` and show context window
+
+5. **Highlighting** — build a regex from the search terms, wrap matches in `<mark>` (HTML) or equivalent styled spans.
+
+### Key API details for direct use
+
+```
+Base URL:  https://table.branham.org/rest
+All requests are POST with Content-Type: application/json
+
+Search:    /userQuery
+Index:     /index/allSermons  
+Content:   /sermons/sermonRequest
+Suggest:   /autoComplete/suggestionsForWordPart
+```
+
+No authentication required. Language parameter is always `"en"` for English.
