@@ -1,7 +1,16 @@
 import * as React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
-import { DownloadCloud, RefreshCw } from "lucide-react";
+import {
+  CloudDownload,
+  RotateCw,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  ArrowUpRight,
+  RefreshCw,
+  HardDriveDownload,
+} from "lucide-react";
 import { useTheme } from "@/Provider/Theme";
 
 type UpdatePayload =
@@ -18,16 +27,14 @@ interface UpdateManagerProps {
   iconColor?: string;
 }
 
-export default function UpdateManager({ isAccentDark = true, iconColor }: UpdateManagerProps = {}) {
-  const btnRef = useRef<HTMLDivElement>(null);
+export default function UpdateManager({}: UpdateManagerProps = {}) {
+  const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [show, setShow] = useState(false);
   const [update, setUpdate] = useState<UpdatePayload>({ status: "idle" });
-  const { accentColor } = useTheme();
+  const { accentColor, isDarkMode } = useTheme();
 
-  const resolvedIconColor = iconColor ?? (isAccentDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.60)");
-
-  // Subscribe to update events on mount
+  // Listen to update status from main process
   useEffect(() => {
     const handler = (_e: unknown, payload: UpdatePayload) => setUpdate(payload);
 
@@ -37,10 +44,10 @@ export default function UpdateManager({ isAccentDark = true, iconColor }: Update
     };
   }, []);
 
-  // Click-outside closes the panel
+  // Click outside to close
   useEffect(() => {
     if (!show) return;
-    const onDoc = (e: MouseEvent) => {
+    const handleClickOutside = (e: MouseEvent) => {
       if (
         panelRef.current &&
         !panelRef.current.contains(e.target as Node) &&
@@ -50,111 +57,133 @@ export default function UpdateManager({ isAccentDark = true, iconColor }: Update
         setShow(false);
       }
     };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [show]);
 
+  // Open automatically when update is ready or available
   useEffect(() => {
-    if (update.status === "available") {
+    if (update.status === "available" || update.status === "ready") {
       setShow(true);
     }
   }, [update.status]);
 
   const checkUpdate = useCallback(() => {
-    window.ipcRenderer.invoke("check-update").catch(() => {});
+    setUpdate({ status: "checking" });
+    window.ipcRenderer.invoke("check-update").catch((err) => {
+      setUpdate({ status: "error", message: err?.message || "Failed to check update" });
+    });
   }, []);
 
   const downloadUpdate = useCallback(() => {
-    window.ipcRenderer.invoke("download-update").catch(() => {});
+    window.ipcRenderer.invoke("download-update").catch((err) => {
+      setUpdate({ status: "error", message: err?.message || "Download failed" });
+    });
   }, []);
 
   const installNow = useCallback(() => {
     window.ipcRenderer.invoke("quit-and-install").catch(() => {});
   }, []);
 
-  // Panel anchored to button
-  const getPanelStyle = (): React.CSSProperties => {
+  const getPanelPosition = (): React.CSSProperties => {
     if (!btnRef.current) return {};
     const rect = btnRef.current.getBoundingClientRect();
     return {
       position: "fixed",
-      top: rect.bottom + 6,
-      right: window.innerWidth - rect.right,
-      zIndex: 9999,
+      top: rect.bottom + 8,
+      right: Math.max(12, window.innerWidth - rect.right - 10),
+      zIndex: 99999,
     };
   };
 
-  const hasDot =
-    update.status === "available" ||
-    update.status === "downloading" ||
-    update.status === "ready";
+  const appVersion = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.0.0";
+  const hasUpdate = update.status === "available" || update.status === "ready";
+  const isDownloading = update.status === "downloading";
+  const isChecking = update.status === "checking";
 
-  const appVersion =
-    typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "—";
-
-  const panel = show
+  const flyout = show
     ? ReactDOM.createPortal(
         <div
           ref={panelRef}
-          style={getPanelStyle()}
-          className="w-72 rounded-xl shadow-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-4 text-zinc-900 dark:text-zinc-100 text-sm select-none"
+          style={getPanelPosition()}
+          className="w-80 rounded-2xl shadow-2xl border border-zinc-200/80 dark:border-zinc-800/80 
+                     bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl p-4 text-zinc-900 dark:text-zinc-100 
+                     select-none animate-in fade-in zoom-in-95 duration-150"
         >
           {/* Header */}
-          <div className="flex items-center justify-between mb-3">
-            <span className="font-semibold text-base">Updates</span>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">
-              v{appVersion}
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-100 dark:border-zinc-800/60">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-6 h-6 rounded-lg flex items-center justify-center"
+                style={{ backgroundColor: `${accentColor}18`, color: accentColor }}
+              >
+                <CloudDownload className="w-3.5 h-3.5" />
+              </div>
+              <span className="font-semibold text-xs tracking-wide">Software Updates</span>
+            </div>
+            <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+              Current: v{appVersion}
             </span>
           </div>
 
-          {/* Status area */}
-          <div className="mb-3 min-h-[28px] flex items-center gap-2">
+          {/* Dynamic Content Body */}
+          <div className="mb-4">
             {update.status === "idle" && (
-              <span className="text-zinc-400 dark:text-zinc-500">
-                Press check to look for updates.
-              </span>
+              <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800/40 text-center">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  AUVID checks for new releases automatically on startup.
+                </p>
+              </div>
             )}
-            {update.status === "checking" && (
-              <>
-                <DownloadCloud
-                  className="w-3.5 h-3.5 animate-spin"
-                  style={{ color: accentColor }}
-                />
-                <span>Checking for updates…</span>
-              </>
+
+            {isChecking && (
+              <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800/40 flex items-center gap-2.5">
+                <RotateCw className="w-4 h-4 animate-spin shrink-0" style={{ color: accentColor }} />
+                <div className="flex flex-col">
+                  <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">Checking GitHub...</span>
+                  <span className="text-[10px] text-zinc-400">Querying latest studio releases</span>
+                </div>
+              </div>
             )}
+
             {update.status === "up-to-date" && (
-              <span className="text-green-600 dark:text-green-400">
-                You're up to date!
-              </span>
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">AUVID is up to date</span>
+                  <span className="text-[10px] text-zinc-400">You are on the latest build (v{appVersion})</span>
+                </div>
+              </div>
             )}
+
             {update.status === "available" && (
-              <span style={{ color: accentColor }}>
-                v
-                {
-                  (update as Extract<UpdatePayload, { status: "available" }>)
-                    .version
-                }{" "}
-                available
-              </span>
-            )}
-            {update.status === "downloading" && (
-              <div className="w-full">
-                <div className="flex justify-between text-xs mb-1">
-                  <span>Downloading…</span>
-                  <span>
-                    {(
-                      update as Extract<
-                        UpdatePayload,
-                        { status: "downloading" }
-                      >
-                    ).percent ?? 0}
-                    %
+              <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 shrink-0 mt-0.5" style={{ color: accentColor }} />
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    New Update Available: v{(update as Extract<UpdatePayload, { status: "available" }>).version}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    Ready to download and upgrade AUVID.
                   </span>
                 </div>
-                <div className="h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+              </div>
+            )}
+
+            {isDownloading && (
+              <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800/40 space-y-2">
+                <div className="flex items-center justify-between text-xs font-medium">
+                  <span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200">
+                    <HardDriveDownload className="w-3.5 h-3.5 animate-bounce" style={{ color: accentColor }} />
+                    Downloading Update...
+                  </span>
+                  <span className="font-mono text-[11px]" style={{ color: accentColor }}>
+                    {(update as Extract<UpdatePayload, { status: "downloading" }>).percent ?? 0}%
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
                   <div
-                    className="h-full transition-all duration-300"
+                    className="h-full rounded-full transition-all duration-300"
                     style={{
                       width: `${(update as Extract<UpdatePayload, { status: "downloading" }>).percent ?? 0}%`,
                       backgroundColor: accentColor,
@@ -163,53 +192,66 @@ export default function UpdateManager({ isAccentDark = true, iconColor }: Update
                 </div>
               </div>
             )}
+
             {update.status === "ready" && (
-              <span style={{ color: accentColor }}>
-                v
-                {
-                  (update as Extract<UpdatePayload, { status: "ready" }>)
-                    .version
-                }{" "}
-                ready to install
-              </span>
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                    v{(update as Extract<UpdatePayload, { status: "ready" }>).version} Ready to Install
+                  </span>
+                  <span className="text-[10px] text-zinc-400">Restart AUVID to apply update</span>
+                </div>
+              </div>
             )}
+
             {update.status === "error" && (
-              <span className="text-red-500 text-xs truncate">
-                {
-                  (update as Extract<UpdatePayload, { status: "error" }>)
-                    .message
-                }
-              </span>
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <div className="flex flex-col">
+                  <span className="text-xs font-medium text-red-600 dark:text-red-400">Update Check Failed</span>
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate max-w-[210px]">
+                    {(update as Extract<UpdatePayload, { status: "error" }>).message}
+                  </span>
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Action buttons */}
-          <div className="flex flex-col gap-2">
-            {(update.status === "idle" ||
-              update.status === "up-to-date" ||
-              update.status === "error") && (
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            {(update.status === "idle" || update.status === "up-to-date" || update.status === "error") && (
               <button
                 onClick={checkUpdate}
-                className="w-full py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors text-xs font-medium"
+                disabled={isChecking}
+                className="w-full py-2 px-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 
+                           transition-all text-xs font-medium text-zinc-700 dark:text-zinc-200 flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                Check for Updates
+                <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} />
+                <span>Check for Updates</span>
               </button>
             )}
+
             {update.status === "available" && (
               <button
                 onClick={downloadUpdate}
-                className="w-full py-1.5 rounded-lg text-white transition-colors text-xs font-medium"
+                className="w-full py-2 px-3 rounded-xl text-white font-medium text-xs shadow-md 
+                           hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 style={{ backgroundColor: accentColor }}
               >
-                Download Update
+                <HardDriveDownload className="w-3.5 h-3.5" />
+                <span>Download Update</span>
               </button>
             )}
+
             {update.status === "ready" && (
               <button
                 onClick={installNow}
-                className="w-full py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white transition-colors text-xs font-medium"
+                className="w-full py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-xs 
+                           shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                Install &amp; Restart
+                <ArrowUpRight className="w-3.5 h-3.5" />
+                <span>Restart &amp; Install</span>
               </button>
             )}
           </div>
@@ -220,26 +262,37 @@ export default function UpdateManager({ isAccentDark = true, iconColor }: Update
 
   return (
     <>
-      <div
+      <button
         ref={btnRef}
         onClick={() => setShow((s) => !s)}
-        className="relative  rounded-md flex items-center justify-center cursor-pointer transition-all duration-150"
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = isAccentDark ? "rgba(255,255,255,0.13)" : "rgba(0,0,0,0.09)")}
-        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
-        title="App updates"
+        className="relative h-7 px-2 rounded-lg flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 
+                   hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 
+                   transition-all duration-150 cursor-pointer no-drag group"
+        title="Check for Software Updates"
       >
-        <DownloadCloud
-          className="w-5 h-5 transition-colors text-black dark:text-white"
-         
+        <CloudDownload
+          className={`w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110 ${
+            isChecking ? "animate-spin text-cyan-500" : ""
+          }`}
+          style={hasUpdate ? { color: accentColor } : undefined}
         />
-        {hasDot && (
+
+        {/* Dynamic State Indicators */}
+        {hasUpdate && (
           <span
-            className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
-            style={{ backgroundColor: accentColor }}
+            className="flex h-1.5 w-1.5 rounded-full"
+            style={{ backgroundColor: update.status === "ready" ? "#10b981" : accentColor }}
           />
         )}
-      </div>
-      {panel}
+
+        {isDownloading && (
+          <span className="text-[10px] font-mono font-semibold" style={{ color: accentColor }}>
+            {(update as Extract<UpdatePayload, { status: "downloading" }>).percent ?? 0}%
+          </span>
+        )}
+      </button>
+
+      {flyout}
     </>
   );
 }
