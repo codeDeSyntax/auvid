@@ -84,7 +84,7 @@ export const AudioCompressor: React.FC = () => {
             format: (name.split('.').pop() || 'MP3').toUpperCase(),
             type: 'audio',
             duration: 0,
-            addedAt: Date.now(),
+            addedAt: new Date().toISOString(),
           });
         }
       }
