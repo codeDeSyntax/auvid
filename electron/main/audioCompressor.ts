@@ -62,6 +62,8 @@ export function getStagingDir(): string {
   return staging;
 }
 
+import { resolveBinaryPath } from './binaries';
+
 // Dynamic imports to handle ESM/CJS compat in Electron context
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let ffmpeg: any = null;
@@ -75,7 +77,7 @@ async function loadFFmpeg() {
     ffmpeg = require('fluent-ffmpeg');
     // ffmpeg-static returns the path to the bundled binary
     const staticPath = require('ffmpeg-static');
-    ffmpegPath = typeof staticPath === 'string' ? staticPath : staticPath.default ?? staticPath;
+    ffmpegPath = resolveBinaryPath(staticPath);
     if (ffmpegPath) {
       ffmpeg.setFfmpegPath(ffmpegPath);
       console.log('[AudioCompressor] FFmpeg binary:', ffmpegPath);
@@ -85,7 +87,7 @@ async function loadFFmpeg() {
 
     try {
       const probePkg = require('ffprobe-static');
-      ffprobePath = probePkg.path ?? (typeof probePkg === 'string' ? probePkg : probePkg.default);
+      ffprobePath = resolveBinaryPath(probePkg?.path ?? probePkg);
       if (ffprobePath) {
         ffmpeg.setFfprobePath(ffprobePath);
         console.log('[AudioCompressor] FFprobe binary:', ffprobePath);
@@ -534,6 +536,25 @@ export function registerAudioCompressorHandlers(getWindow: () => BrowserWindow |
     } catch (err) {
       return { error: String(err) };
     }
+  });
+
+  // Open audio files dialog
+  ipcMain.handle('dialog:open-audio-compress', async () => {
+    const win = getWindow();
+    if (!win || win.isDestroyed()) return [];
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Select Audio Files to Compress',
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        {
+          name: 'Audio Files',
+          extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'ac3', 'aiff', 'alac', 'amr', 'ape'],
+        },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (result.canceled || !result.filePaths.length) return [];
+    return result.filePaths;
   });
 
   // Batch save all compressed files

@@ -60,6 +60,7 @@ export const SoundRecorder: React.FC = () => {
     saveRecording,
     deleteRecording,
     refreshDevices,
+    openRecordingsFolder,
   } = useSoundRecorder();
 
   const [customName, setCustomName] = useState('');
@@ -130,45 +131,57 @@ export const SoundRecorder: React.FC = () => {
           })}
         </div>
 
-        {/* Right Microphone Device Pill */}
-        <div className="relative">
+        {/* Right Section: Open Recordings Folder + Microphone Device Pill */}
+        <div className="flex items-center space-x-2">
           <button
             type="button"
-            onClick={() => setDeviceDropdownOpen(v => !v)}
-            disabled={isRecording}
-            className="flex items-center space-x-2 px-4 py-1.5 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 text-xs font-bold text-zinc-800 dark:text-zinc-200 shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+            onClick={openRecordingsFolder}
+            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 text-xs font-bold text-zinc-700 dark:text-zinc-300 shadow-xs transition-all active:scale-95 cursor-pointer"
+            title="Open Recordings Folder in File Explorer"
           >
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: isRecording ? '#ef4444' : accentColor }} />
-            <span className="max-w-[140px] truncate">{selectedDevice?.label || 'Default Mic'}</span>
-            <ChevronDown className="w-3 h-3 text-zinc-400" />
+            <FolderOpen className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="hidden sm:inline">Recordings Folder</span>
           </button>
 
-          {deviceDropdownOpen && (
-            <div className="absolute right-0 top-full mt-2 w-64 p-1.5 rounded-2xl bg-white/95 dark:bg-zinc-900/95 border border-zinc-200 dark:border-zinc-800 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in zoom-in-95">
-              <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 border-b border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between">
-                <span>Input Interfaces</span>
-                <button type="button" onClick={refreshDevices} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-white">
-                  <RefreshCw className="w-3 h-3" />
-                </button>
-              </div>
-              <div className="max-h-48 overflow-y-auto no-scrollbar py-1 space-y-0.5">
-                {devices.map((d) => (
-                  <button
-                    key={d.deviceId}
-                    type="button"
-                    onClick={() => {
-                      setSelectedDeviceId(d.deviceId);
-                      setDeviceDropdownOpen(false);
-                    }}
-                    className="w-full px-3 py-1.5 rounded-xl text-left text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800/80 flex items-center justify-between transition-colors cursor-pointer"
-                  >
-                    <span className="truncate">{d.label}</span>
-                    {d.deviceId === selectedDeviceId && <Check className="w-3.5 h-3.5" style={{ color: accentColor }} />}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setDeviceDropdownOpen(v => !v)}
+              disabled={isRecording}
+              className="flex items-center space-x-2 px-4 py-1.5 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 text-xs font-bold text-zinc-800 dark:text-zinc-200 shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+            >
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: isRecording ? '#ef4444' : accentColor }} />
+              <span className="max-w-[140px] truncate">{selectedDevice?.label || 'Default Mic'}</span>
+              <ChevronDown className="w-3 h-3 text-zinc-400" />
+            </button>
+
+            {deviceDropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 w-64 p-1.5 rounded-2xl bg-white/95 dark:bg-zinc-900/95 border border-zinc-200 dark:border-zinc-800 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in zoom-in-95">
+                <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 border-b border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between">
+                  <span>Input Interfaces</span>
+                  <button type="button" onClick={refreshDevices} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-white">
+                    <RefreshCw className="w-3 h-3" />
                   </button>
-                ))}
+                </div>
+                <div className="max-h-48 overflow-y-auto no-scrollbar py-1 space-y-0.5">
+                  {devices.map((d) => (
+                    <button
+                      key={d.deviceId}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDeviceId(d.deviceId);
+                        setDeviceDropdownOpen(false);
+                      }}
+                      className="w-full px-3 py-1.5 rounded-xl text-left text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800/80 flex items-center justify-between transition-colors cursor-pointer"
+                    >
+                      <span className="truncate">{d.label}</span>
+                      {d.deviceId === selectedDeviceId && <Check className="w-3.5 h-3.5" style={{ color: accentColor }} />}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -265,7 +278,15 @@ export const SoundRecorder: React.FC = () => {
           <div className="p-3 rounded-2xl bg-zinc-100/70 dark:bg-zinc-950/70 border border-zinc-200 dark:border-zinc-800/80 space-y-2">
             <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
               <span>Output Destination</span>
-              <span className="text-zinc-800 dark:text-zinc-200 truncate max-w-[160px]">AUVID / Recordings</span>
+              <button
+                type="button"
+                onClick={openRecordingsFolder}
+                className="flex items-center space-x-1 text-zinc-800 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer group"
+                title="Open Recordings Folder in File Explorer"
+              >
+                <span className="truncate max-w-[140px] group-hover:underline">AUVID / Recordings</span>
+                <FolderOpen className="w-3 h-3 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
+              </button>
             </div>
 
             {/* In-App Playback Scrubber if recorded */}

@@ -300,6 +300,13 @@ export function useSoundRecorder() {
     } catch (_) {}
   }, [refreshRecordings]);
 
+  // ── 10. Open Folder ──
+  const openRecordingsFolder = useCallback(async () => {
+    try {
+      await window.ipcRenderer?.invoke('recorder:open-folder');
+    } catch (_) {}
+  }, []);
+
   return {
     devices,
     selectedDeviceId,
@@ -326,5 +333,6 @@ export function useSoundRecorder() {
     saveRecording,
     deleteRecording,
     refreshDevices,
+    openRecordingsFolder,
   };
 }

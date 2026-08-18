@@ -3,7 +3,7 @@
 
 import React from 'react';
 import {
-  Sliders, Zap, Cpu, HardDrive, Sparkles, Film,
+  Sliders, Zap, Cpu, HardDrive, Film,
   Volume2, VolumeX, Shield, Check, Info, Gauge
 } from 'lucide-react';
 import {
@@ -14,7 +14,6 @@ import {
   VideoResolution,
   VideoFps,
   VideoAudioCodec,
-  VIDEO_COMPRESS_PRESETS,
   HWAccelInfo,
 } from '@/types/videoCompressor';
 
@@ -35,13 +34,6 @@ export const VideoSettingsPanel: React.FC<VideoSettingsPanelProps> = ({
     onChange({ ...settings, ...partial });
   };
 
-  const applyPreset = (presetId: string) => {
-    const preset = VIDEO_COMPRESS_PRESETS.find(p => p.id === presetId);
-    if (preset) {
-      onChange({ ...settings, ...preset.settings });
-    }
-  };
-
   return (
     <div className="w-80 shrink-0 border-l border-zinc-200/80 dark:border-zinc-800/70 flex flex-col overflow-hidden bg-white/40 dark:bg-zinc-900/30">
       {/* Header */}
@@ -53,42 +45,7 @@ export const VideoSettingsPanel: React.FC<VideoSettingsPanelProps> = ({
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4">
-
-        {/* ── 1. Presets Selector ── */}
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 flex items-center space-x-1">
-            <Sparkles className="w-3 h-3 text-amber-500" />
-            <span>Target Presets</span>
-          </label>
-          <div className="grid grid-cols-2 gap-1.5">
-            {VIDEO_COMPRESS_PRESETS.slice(0, 6).map(preset => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => applyPreset(preset.id)}
-                className="px-2.5 py-2 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 hover:border-zinc-400 dark:hover:border-zinc-600 bg-white/80 dark:bg-zinc-800/40 text-left transition-all cursor-pointer flex flex-col justify-between group"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 truncate group-hover:text-zinc-900 dark:group-hover:text-zinc-100">
-                    {preset.name}
-                  </span>
-                  {preset.badge && (
-                    <span className="text-[9px] px-1 py-0.2 rounded font-mono font-bold bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">
-                      {preset.badge}
-                    </span>
-                  )}
-                </div>
-                <p className="text-[9px] text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
-                  {preset.description}
-                </p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="h-px bg-zinc-100 dark:bg-zinc-800/60" />
-
-        {/* ── 2. Compression Mode ── */}
+        {/* ── 1. Compression Mode ── */}
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
             Compression Mode

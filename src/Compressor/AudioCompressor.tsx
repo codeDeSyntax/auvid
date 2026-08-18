@@ -1,10 +1,15 @@
 // ─── Audio Compressor Workspace ───────────────────────────────────────────────
-// Full-featured audio compression tool matching the XConvert-inspired UI.
-// Left: file queue + drop zone + A/B Audio Comparison Player
-// Right: settings panel (global or per-file)
+// Full-featured audio compression studio matching the Video Compressor layout.
+// Left: Header + file queue + drop zone + A/B Audio Comparison Player
+// Right: Settings panel (hidden when queue is empty)
 
 import React, { useCallback, useRef, useState } from 'react';
-import { Save, Zap, Loader2 } from 'lucide-react';
+import {
+  Upload, FolderOpen, Play, CheckCircle2,
+  Trash2, Loader2, Zap, Save
+} from 'lucide-react';
+import { useTheme } from '@/Provider/Theme';
+import { useMediaContext } from '@/Provider/MediaContext';
 import { useAudioCompressor } from './useAudioCompressor';
 import { AudioFileRow } from './AudioFileRow';
 import { AudioSettingsPanel } from './AudioSettingsPanel';
@@ -13,15 +18,17 @@ import { CompressConfirmModal } from './CompressConfirmModal';
 import { AudioFileEntry } from '@/types/audioCompressor';
 import { getAssetPath } from '@/utils/assets';
 
-// ─── Supported format chips ────────────────────────────────────────────────────
-const FORMAT_CHIPS = ['MP3', 'WAV', 'FLAC', 'AAC', 'M4A', 'OGG', 'OPUS', 'WMA', 'AC3', 'AIFF', 'ALAC'];
-
 function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  if (!bytes || bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 export const AudioCompressor: React.FC = () => {
+  const { accentColor } = useTheme();
+  const { addMediaItem } = useMediaContext();
+
   const {
     files,
     globalSettings,
@@ -38,19 +45,14 @@ export const AudioCompressor: React.FC = () => {
     compressFile,
     compressAll,
     cancelFile,
-    setOutputDir,
     pickOutputDir,
-    setUseHWAccel,
-    openOutputFolder,
     revealFile,
     saveFile,
-    saveFileAs,
     saveAll,
   } = useAudioCompressor();
 
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [previewingFileId, setPreviewingFileId] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Confirmation Modal State ───────────────────────────────────────────────
@@ -66,6 +68,30 @@ export const AudioCompressor: React.FC = () => {
 
   const selectedFile = files.find(f => f.id === selectedFileId) ?? null;
   const previewingFile = files.find(f => f.id === previewingFileId) ?? selectedFile ?? (files.length > 0 ? files[0] : null);
+
+  // Native file browsing dialog
+  const handleBrowseFiles = useCallback(async () => {
+    try {
+      const selected = (await window.ipcRenderer?.invoke('dialog:open-audio-compress')) as string[] | null;
+      if (selected && selected.length > 0) {
+        for (const filePath of selected) {
+          const name = filePath.split(/[/\\]/).pop() || 'Audio File';
+          addMediaItem({
+            id: Math.random().toString(36).substring(2, 9) + Date.now().toString(36),
+            name,
+            path: filePath,
+            size: 0,
+            format: (name.split('.').pop() || 'MP3').toUpperCase(),
+            type: 'audio',
+            duration: 0,
+            addedAt: Date.now(),
+          });
+        }
+      }
+    } catch (_) {
+      fileInputRef.current?.click();
+    }
+  }, [addMediaItem]);
 
   const handleRequestCompressSingle = useCallback((file: AudioFileEntry) => {
     setSelectedFileId(file.id);
@@ -103,15 +129,13 @@ export const AudioCompressor: React.FC = () => {
   // ── Drag & Drop ─────────────────────────────────────────────────────────────
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
+    e.stopPropagation();
   }, []);
-
-  const handleDragLeave = useCallback(() => setIsDragging(false), []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      setIsDragging(false);
+      e.stopPropagation();
       if (e.dataTransfer.files.length > 0) {
         addFiles(e.dataTransfer.files);
       }
@@ -132,7 +156,8 @@ export const AudioCompressor: React.FC = () => {
   // ── Stats ─────────────────────────────────────────────────────────────────────
   const doneFiles = files.filter(f => f.status === 'done');
   const unsavedDoneFiles = doneFiles.filter(f => !f.isSaved);
-  const totalSaved = doneFiles.reduce((acc, f) => acc + (f.size - (f.result?.compressedSize ?? f.size)), 0);
+  const pendingCount = files.filter(f => f.status === 'queued' || f.status === 'error').length;
+  const totalOriginalSize = files.reduce((acc, f) => acc + (f.size || 0), 0);
 
   // ── Settings for selected file or global ────────────────────────────────────
   const panelSettings = selectedFile?.customSettings
@@ -144,115 +169,122 @@ export const AudioCompressor: React.FC = () => {
     : updateGlobalSettings;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-transparent text-zinc-900 dark:text-zinc-100 transition-colors duration-200">
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept="audio/*,.mp3,.wav,.flac,.aac,.m4a,.ogg,.opus,.wma,.ac3,.aiff,.alac,.amr"
-        className="hidden"
-        onChange={handleFileInput}
-      />
-
-      {/* ── Toolbar ──────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3.5  shrink-0 bg-transparent  gap-2">
-        <div className="flex items-center gap-2">
-          <button
-            id="audio-compressor-add-btn"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center space-x-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-black bg-zinc-900 hover:bg-black text-white dark:bg-cyan-500 dark:text-black dark:hover:brightness-105 transition-all shadow-md active:scale-95 cursor-pointer"
-          >
-            <span className="text-base leading-none font-black">+</span>
-            <span className="hidden sm:inline">Add Audio Files</span>
-            <span className="sm:hidden">Add</span>
-          </button>
-
-          {files.length > 0 && (
-            <button
-              onClick={clearAll}
-              className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold bg-zinc-100 dark:bg-zinc-800 hover:bg-red-50 dark:hover:bg-red-500/10 text-zinc-600 dark:text-zinc-400 hover:text-red-500 border border-zinc-200 dark:border-zinc-700/60 transition-all cursor-pointer"
-            >
-              Clear
-            </button>
-          )}
+    <div
+      className="flex-1 flex flex-col overflow-hidden bg-transparent text-zinc-900 dark:text-zinc-100 transition-colors duration-200"
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+    >
+      {/* ── Header ── */}
+      <div className="px-8 pt-6 pb-4 shrink-0 flex items-center justify-between gap-4">
+        <div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider mb-2 border border-zinc-200/80 dark:border-zinc-800/80 bg-transparent backdrop-blur-md shadow-xs">
+            <span style={{ color: accentColor }}>Audio Engine</span>
+            <span className="text-[10px] text-zinc-400 font-mono">· VBR / CBR</span>
+          </div>
+          <h1 className="text-2xl font-black text-zinc-900 dark:text-zinc-50 leading-tight tracking-tight">
+            Audio Compressor
+          </h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Reduce file size while preserving high acoustic fidelity — MP3, WAV, FLAC, AAC, OGG, OPUS
+          </p>
         </div>
 
-
-        {/* Queue summary count */}
-        {files.length > 0 && (
-          <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400 shrink-0">
-            <span>
-              {files.length} {files.length === 1 ? 'file' : 'files'}
-            </span>
-            {doneFiles.length > 0 && (
-              <span>
-                Saved{' '}
-                <span className="font-bold" style={{ color: 'var(--accent)' }}>{formatBytes(totalSaved)}</span>
-              </span>
-            )}
-          </div>
-        )}
+        <div className="flex items-center space-x-2.5">
+          <button
+            type="button"
+            onClick={handleBrowseFiles}
+            className="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-white/80 dark:bg-zinc-800/80 hover:bg-white dark:hover:bg-zinc-700 border border-zinc-200/80 dark:border-zinc-700/60 text-zinc-700 dark:text-zinc-200 shadow-xs transition-all active:scale-95 cursor-pointer"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span>Browse Audio</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-zinc-900 hover:bg-black text-white dark:bg-cyan-500 dark:text-black dark:hover:brightness-105 shadow-sm transition-all active:scale-95 cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>Add Audio</span>
+          </button>
+        </div>
       </div>
 
-      {/* ── Main split layout ────────────────────────────────────────────────── */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* LEFT: File queue + Audio Comparison Player */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-zinc50">
-          {files.length === 0 ? (
-            /* ── Empty / Drop zone ── */
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`flex-1 flex flex-col items-center justify-center cursor-pointer m-6 rounded-3xl border-2 border-dashed transition-all duration-200 ${
-                isDragging
-                  ? 'scale-[1.005]'
-                  : 'border-zinc-300 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-700 bg-white/60 dark:bg-zinc-900/30 hover:bg-white dark:hover:bg-zinc-900/50 shadow-sm'
-              }`}
-              style={
-                isDragging
-                  ? {
-                      borderColor: 'var(--accent)',
-                      backgroundColor: 'color-mix(in srgb, var(--accent) 8%, transparent)',
-                    }
-                  : undefined
-              }
-            >
-              <div className="flex flex-col items-center space-y-3 text-center px-8 max-w-md select-none">
-                <div className="relative mb-1 group">
-                  <div
-                    className="absolute inset-0 rounded-full blur-2xl opacity-25 dark:opacity-30 transition-all group-hover:opacity-40"
-                    style={{ backgroundColor: 'var(--accent)' }}
-                  />
-                  <img
-                    src={getAssetPath("empty-trimmer.png")}
-                    alt="Audio Compressor"
-                    className="relative w-40 h-40 object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-xl"
-                  />
+      {/* ── Main Body ── */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {files.length === 0 ? (
+          /* ── Empty State (100% Full Width — Sidebar Hidden) ── */
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none">
+            <div className="relative mb-3 group">
+              <div
+                className="absolute inset-0 rounded-full blur-2xl opacity-25 dark:opacity-30 transition-all group-hover:opacity-40"
+                style={{ backgroundColor: accentColor }}
+              />
+              <img
+                src={getAssetPath("empty-trimmer.png")}
+                alt="Audio Compressor"
+                className="relative w-44 h-44 object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-xl"
+              />
+            </div>
+
+            <h3 className="text-xl font-black text-zinc-900 dark:text-zinc-100 tracking-tight">
+              No Audio Files Added
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-md leading-relaxed">
+              Drag &amp; drop audio files anywhere on this window or click below to compress MP3, WAV, FLAC, AAC, and more.
+            </p>
+
+            <div className="mt-6 flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={handleBrowseFiles}
+                className="flex items-center space-x-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-zinc-900 hover:bg-black text-white dark:bg-cyan-500 dark:text-black dark:hover:brightness-105 shadow-md transition-all active:scale-95 cursor-pointer"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Select Audio to Compress</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* ── Loaded Queue Studio Layout (Queue on Left + AudioSettingsPanel on Right) ── */
+          <>
+            {/* Left Main Queue Area */}
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden p-6 space-y-4">
+              {/* Queue Header Bar */}
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800/80">
+                <div className="flex items-center space-x-3">
+                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                    Queue ({files.length} {files.length === 1 ? 'track' : 'tracks'})
+                  </span>
+                  <span className="text-xs font-mono text-zinc-400">
+                    Total: {formatBytes(totalOriginalSize)}
+                  </span>
                 </div>
-                <div>
-                  <p className="text-lg font-black text-zinc-900 dark:text-zinc-100 mb-1 tracking-tight">
-                    {isDragging ? 'Drop Audio Files Here' : 'Drag & Drop Audio Files to Compress'}
-                  </p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    or click to browse from your computer · MP3, WAV, FLAC, AAC, OGG, OPUS, M4A
-                  </p>
+
+                <div className="flex items-center space-x-2">
+                  {doneFiles.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        files.filter(f => f.status === 'done').forEach(f => removeFile(f.id));
+                      }}
+                      className="text-xs font-bold text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+                    >
+                      Clear Completed
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={clearAll}
+                    disabled={isCompressingAll}
+                    className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors cursor-pointer disabled:opacity-40"
+                  >
+                    Clear All
+                  </button>
                 </div>
               </div>
-            </div>
-          ) : (
-            /* ── File list with A/B Player at Top ── */
-            <div
-              className="flex-1 overflow-y-auto no-scrollbar"
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              {/* Max-width content wrapper – prevents stretching on wide windows */}
-              <div className="max-w-3xl mx-auto px-4 sm:px-5 py-4 sm:py-5 space-y-4">
-                {/* Integrated A/B Audio Comparison Player */}
+
+              {/* Scrollable Audio File Rows + A/B Audio Comparison Player */}
+              <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 pr-1">
                 {previewingFile && (
                   <AudioComparisonPlayer
                     file={previewingFile}
@@ -261,7 +293,6 @@ export const AudioCompressor: React.FC = () => {
                   />
                 )}
 
-                {/* File list container */}
                 <div className="bg-white/80 dark:bg-zinc-900/60 backdrop-blur-sm border border-zinc-200/80 dark:border-zinc-800/60 rounded-2xl overflow-hidden shadow-xs divide-y divide-zinc-100 dark:divide-zinc-800/60">
                   {files.map(file => (
                     <AudioFileRow
@@ -289,96 +320,20 @@ export const AudioCompressor: React.FC = () => {
                     />
                   ))}
                 </div>
-
-                {/* Drop more files zone at bottom */}
-                <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`rounded-2xl border border-dashed transition-all cursor-pointer py-4 text-center ${
-                    isDragging
-                      ? ''
-                      : 'border-zinc-300 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-300 bg-white/40 dark:bg-zinc-900/20'
-                  }`}
-                  style={
-                    isDragging
-                      ? {
-                          borderColor: 'var(--accent)',
-                          backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
-                          color: 'var(--accent)',
-                        }
-                      : undefined
-                  }
-                >
-                  <span className="text-xs font-bold">+ Drop or click to add more audio files</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-
-          {/* ── Bottom Bar ─────────────────────────────────────────────────── */}
-          {files.length > 0 && (
-            <div className="shrink-0 border-t border-zinc-200/80 dark:border-zinc-800/70 bg-white/80 dark:bg-zinc-900/70 backdrop-blur-md px-6 py-3.5 space-y-3 shadow-sm">
-              {/* Output directory row */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider shrink-0">
-                  Output:
-                </span>
-                {outputDir ? (
-                  <div className="flex-1 flex items-center gap-2 min-w-0">
-                    <span
-                      className="flex-1 text-xs text-zinc-800 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl px-3 py-1.5 truncate border border-zinc-200 dark:border-zinc-700/60 font-mono min-w-0"
-                      title={outputDir}
-                    >
-                      {outputDir}
-                    </span>
-                    <button
-                      onClick={() => openOutputFolder(outputDir)}
-                      className="shrink-0 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-colors border border-zinc-200 dark:border-zinc-700 cursor-pointer"
-                    >
-                      Open
-                    </button>
-                    <button
-                      onClick={pickOutputDir}
-                      className="shrink-0 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-colors border border-zinc-200 dark:border-zinc-700 cursor-pointer"
-                    >
-                      Change
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex-1 flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500 italic">
-                      Default: Music/AUVID
-                    </span>
-                    <button
-                      onClick={pickOutputDir}
-                      className="text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-colors border border-zinc-200 dark:border-zinc-700/60 cursor-pointer"
-                    >
-                      Choose Folder
-                    </button>
-                  </div>
-                )}
               </div>
 
-              {/* Action row */}
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+              {/* Bottom Action Bar */}
+              <div className="pt-3 border-t border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
                 <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {doneFiles.length > 0 && (
-                    <span>
-                      <strong className="text-zinc-900 dark:text-zinc-100">{doneFiles.length}</strong> of{' '}
-                      <strong>{files.length}</strong> compressed
-                    </span>
-                  )}
+                  {pendingCount > 0 ? `${pendingCount} audio tracks pending compression` : 'All tracks completed!'}
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {/* Save All button – only appears when there are unsaved compressed files */}
                   {unsavedDoneFiles.length > 0 && (
                     <button
+                      type="button"
                       onClick={saveAll}
-                      className="flex items-center space-x-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 shadow-xs hover:shadow-sm transition-all cursor-pointer"
+                      className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 shadow-xs hover:shadow-sm transition-all cursor-pointer"
                     >
                       <Save className="w-3.5 h-3.5" />
                       <span>Save All ({unsavedDoneFiles.length})</span>
@@ -386,43 +341,52 @@ export const AudioCompressor: React.FC = () => {
                   )}
 
                   <button
-                    id="audio-compressor-compress-all-btn"
+                    type="button"
                     onClick={handleRequestCompressAll}
-                    disabled={isCompressingAll || files.every(f => f.status === 'done')}
-                    className="flex items-center space-x-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-black bg-zinc-900 hover:bg-black text-white dark:bg-cyan-500 dark:text-black dark:hover:brightness-105 shadow-lg active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    disabled={isCompressingAll || pendingCount === 0}
+                    style={{ backgroundColor: accentColor }}
+                    className="px-6 py-3 rounded-xl text-xs font-black text-black shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center space-x-2 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {isCompressingAll ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="hidden sm:inline">Compressing…</span>
-                        <span className="sm:hidden">Working…</span>
+                        <Loader2 className="w-4 h-4 animate-spin fill-black" />
+                        <span>Compressing Queue…</span>
                       </>
                     ) : (
                       <>
-                        <Zap className="w-4 h-4" />
-                        <span className="hidden sm:inline">Compress All ({files.length})</span>
-                        <span className="sm:hidden">Compress ({files.length})</span>
+                        <Play className="w-4 h-4 fill-black" />
+                        <span>Compress All ({pendingCount})</span>
                       </>
                     )}
                   </button>
                 </div>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* RIGHT: Settings Panel */}
-        <AudioSettingsPanel
-          selectedFile={selectedFile}
-          settings={panelSettings}
-          onChange={panelOnChange}
-          isCustom={selectedFile?.customSettings ?? false}
-          onToggleCustom={selectedFile ? () => toggleCustomSettings(selectedFile.id) : undefined}
-          onApplyToAll={applyGlobalToAll}
-          onCompress={selectedFile && selectedFile.status !== 'done' && selectedFile.status !== 'processing' ? () => handleRequestCompressSingle(selectedFile) : undefined}
-          isCompressing={selectedFile?.status === 'processing' || isCompressingAll}
-        />
+            {/* Right Settings Panel */}
+            <AudioSettingsPanel
+              selectedFile={selectedFile}
+              settings={panelSettings}
+              onChange={panelOnChange}
+              isCustom={selectedFile?.customSettings ?? false}
+              onToggleCustom={selectedFile ? () => toggleCustomSettings(selectedFile.id) : undefined}
+              onApplyToAll={applyGlobalToAll}
+              onCompress={selectedFile && selectedFile.status !== 'done' && selectedFile.status !== 'processing' ? () => handleRequestCompressSingle(selectedFile) : undefined}
+              isCompressing={selectedFile?.status === 'processing' || isCompressingAll}
+            />
+          </>
+        )}
       </div>
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="audio/*,.mp3,.wav,.flac,.aac,.m4a,.ogg,.opus,.wma,.ac3,.aiff,.alac,.amr"
+        className="hidden"
+        onChange={handleFileInput}
+      />
 
       {/* ── Compression Review / Confirmation Modal ── */}
       <CompressConfirmModal

@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+import { resolveBinaryPath } from './binaries';
+
 let ffmpeg: any = null;
 let ffmpegPath: string | null = null;
 let ffprobePath: string | null = null;
@@ -24,13 +26,13 @@ async function loadFFmpeg() {
   try {
     ffmpeg = require('fluent-ffmpeg');
     const staticPath = require('ffmpeg-static');
-    ffmpegPath = typeof staticPath === 'string' ? staticPath : staticPath.default ?? staticPath;
+    ffmpegPath = resolveBinaryPath(staticPath);
     if (ffmpegPath) {
       ffmpeg.setFfmpegPath(ffmpegPath);
     }
     try {
       const probePkg = require('ffprobe-static');
-      ffprobePath = probePkg.path ?? (typeof probePkg === 'string' ? probePkg : probePkg.default);
+      ffprobePath = resolveBinaryPath(probePkg?.path ?? probePkg);
       if (ffprobePath) {
         ffmpeg.setFfprobePath(ffprobePath);
       }

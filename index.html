@@ -18,8 +18,10 @@
             ? window.matchMedia("(prefers-color-scheme: dark)").matches
             : _dm === "true";
         if (_dark) document.documentElement.classList.add("dark");
-        var _ac = localStorage.getItem("accentColor");
-        if (_ac) document.documentElement.style.setProperty("--accent", _ac);
+        var _ac = _dark
+          ? (localStorage.getItem("accentColorDark") || localStorage.getItem("accentColor") || "#06b6d4")
+          : (localStorage.getItem("accentColorLight") || localStorage.getItem("accentColor") || "#06b6d4");
+        document.documentElement.style.setProperty("--accent", _ac);
       } catch (e) {}
     </script>
   </head>

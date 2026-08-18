@@ -12,6 +12,8 @@ import { spawn } from 'node:child_process';
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+import { resolveBinaryPath } from './binaries';
+
 // ─── FFmpeg / FFprobe lazy loading (reuses same pattern as audioCompressor) ──
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let ffmpeg: any = null;
@@ -23,12 +25,12 @@ async function loadFFmpeg() {
   try {
     ffmpeg = require('fluent-ffmpeg');
     const staticPath = require('ffmpeg-static');
-    ffmpegPath = typeof staticPath === 'string' ? staticPath : (staticPath.default ?? staticPath);
+    ffmpegPath = resolveBinaryPath(staticPath);
     if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
     try {
       const probePkg = require('ffprobe-static');
-      ffprobePath = probePkg.path ?? (typeof probePkg === 'string' ? probePkg : probePkg.default);
+      ffprobePath = resolveBinaryPath(probePkg?.path ?? probePkg);
       if (ffprobePath) ffmpeg.setFfprobePath(ffprobePath);
     } catch { /* ignore */ }
   } catch (err) {
