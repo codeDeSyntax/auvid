@@ -14,7 +14,8 @@ import {
 } from "@ant-design/icons";
 import { useTheme } from "@/Provider/Theme";
 import { useMediaContext } from "@/Provider/MediaContext";
-import { MediaItem, MediaTool } from "@/types";
+import { useJobStore } from "@/Provider/JobStore";
+import { MediaTool } from "@/types";
 
 interface NavItem {
   id: MediaTool;
@@ -40,6 +41,7 @@ const bottomNav: NavItem[] = [
 export const Sidebar: React.FC = () => {
   const { accentColor } = useTheme();
   const { activeTool, setActiveTool, addMediaFiles } = useMediaContext();
+  const { getJob } = useJobStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleQuickAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,6 +53,10 @@ export const Sidebar: React.FC = () => {
 
   const NavBtn: React.FC<NavItem> = ({ id, label, icon }) => {
     const isActive = activeTool === id;
+    const job = getJob(id);
+    const hasActiveJob = job?.status === 'processing';
+    const hasError = job?.status === 'error';
+
     return (
       <div className="relative group flex items-center justify-center">
         <button
@@ -73,12 +79,36 @@ export const Sidebar: React.FC = () => {
             />
           )}
           {icon}
+
+          {/* Job activity badge — pulsing ring when a background job is running */}
+          {(hasActiveJob || hasError) && !isActive && (
+            <span
+              className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-950 ${
+                hasError
+                  ? 'bg-red-500'
+                  : 'animate-pulse'
+              }`}
+              style={hasActiveJob ? { backgroundColor: accentColor } : undefined}
+              title={hasError ? 'Job failed' : `${Math.round(job?.progress ?? 0)}% complete`}
+            />
+          )}
+
+          {/* Progress arc overlay on the button when active tool has a running job */}
+          {hasActiveJob && isActive && (
+            <span
+              className="absolute inset-0 rounded-xl pointer-events-none"
+              style={{
+                boxShadow: `0 0 0 2px ${accentColor}55`,
+                animation: 'pulse 1.5s ease-in-out infinite',
+              }}
+            />
+          )}
         </button>
 
-        {/* Hover Tooltip Bubble */}
+        {/* Hover Tooltip Bubble — also shows job progress */}
         <div
           className="absolute left-full ml-3.5 top-1/2 -translate-y-1/2 z-[9999]
-                     w-max min-w-max inline-flex items-center
+                     w-max min-w-max inline-flex items-center gap-2
                      bg-zinc-900 dark:bg-zinc-800 text-white text-xs font-bold
                      px-3.5 py-1.5 rounded-xl shadow-2xl pointer-events-none select-none
                      opacity-0 group-hover:opacity-100 whitespace-nowrap
@@ -87,6 +117,19 @@ export const Sidebar: React.FC = () => {
           style={{ width: "max-content", minWidth: "max-content" }}
         >
           <span>{label}</span>
+          {hasActiveJob && (
+            <span
+              className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: `${accentColor}33`, color: accentColor }}
+            >
+              {Math.round(job?.progress ?? 0)}%
+            </span>
+          )}
+          {hasError && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">
+              Failed
+            </span>
+          )}
           {/* Small left arrow */}
           <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-zinc-900 dark:border-r-zinc-800" />
         </div>

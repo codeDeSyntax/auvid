@@ -12,9 +12,10 @@ import {
   ChevronRight, Download, RefreshCw,
   Repeat, ArrowRight, CheckCircle2, Maximize2,
   Film, Sparkles, Music, Gauge, FastForward,
-  Rewind
+  Rewind, X, Trash2
 } from 'lucide-react';
 import { useTheme } from '@/Provider/Theme';
+import { useJobStore } from '@/Provider/JobStore';
 import { VideoTimeline, formatTime, formatDurationHuman } from './VideoTimeline';
 import { VideoTrimConfirmModal } from './VideoTrimConfirmModal';
 import type { VideoRegion } from './VideoTimeline';
@@ -115,6 +116,7 @@ const TimecodeInput: React.FC<{
 // ═══════════════════════════════════════════════════════════════════════════════
 export const VideoEditor: React.FC = () => {
   const { accentColor, isDarkMode } = useTheme();
+  const { reportJob, clearJob } = useJobStore();
 
   // ── Files state ─────────────────────────────────────────────────────────────
   const [files, setFiles] = useState<VideoFile[]>([]);
@@ -151,6 +153,22 @@ export const VideoEditor: React.FC = () => {
       setIsMuted(false);
     }
   }, [selectedId, duration]);
+
+  // ── Remove Video Callback ──────────────────────────────────────────────────
+  const handleRemoveFile = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    stopPlayback(true);
+    setFiles(prev => {
+      const remaining = prev.filter(f => f.id !== id);
+      if (id === selectedId) {
+        const removedIdx = prev.findIndex(f => f.id === id);
+        const next = remaining[removedIdx] ?? remaining[removedIdx - 1] ?? null;
+        setSelectedId(next?.id ?? null);
+      }
+      return remaining;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   // ── Native Streaming Video Playback Engine (0ms Instant) ───────────────────
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -477,14 +495,20 @@ export const VideoEditor: React.FC = () => {
   useEffect(() => {
     const handler = (_event: unknown, data: { percent?: number }) => {
       if (typeof data?.percent === 'number') {
-        setExportProgress(Math.min(100, Math.max(0, data.percent)));
+        const pct = Math.min(100, Math.max(0, data.percent));
+        setExportProgress(pct);
+        reportJob('video-cut', {
+          status: 'processing',
+          progress: pct,
+          label: `Exporting video (${Math.round(pct)}%)`,
+        });
       }
     };
     window.ipcRenderer?.on?.('video:progress', handler);
     return () => {
       window.ipcRenderer?.off?.('video:progress', handler);
     };
-  }, []);
+  }, [reportJob]);
 
   const handleExecuteTrim = useCallback(async (overrideMode?: 'new-file' | 'in-place') => {
     if (!selectedFile || duration <= 0) return;
@@ -494,6 +518,7 @@ export const VideoEditor: React.FC = () => {
     setExportStatus('exporting');
     setExportProgress(0);
     setIsOverwritten(false);
+    reportJob('video-cut', { status: 'processing', progress: 0, label: 'Exporting video…' });
 
     try {
       const result = await window.ipcRenderer?.invoke('video:export', {
@@ -525,11 +550,13 @@ export const VideoEditor: React.FC = () => {
         setIsOverwritten(false);
         setExportStatus('done');
       }
+      clearJob('video-cut');
     } catch (err) {
       console.error('[VideoEditor] Export error:', err);
       setExportStatus('error');
+      reportJob('video-cut', { status: 'error', progress: 0, label: 'Export failed' });
     }
-  }, [selectedFile, duration, region, speed, gain, isMuted, outputFormat, targetResolution, saveMode, cutAction, selectedId, stopPlayback]);
+  }, [selectedFile, duration, region, speed, gain, isMuted, outputFormat, targetResolution, saveMode, cutAction, selectedId, stopPlayback, reportJob, clearJob]);
 
   // Extract Audio
   const handleExtractAudio = useCallback(async (format: 'mp3' | 'wav' | 'aac' | 'flac' = 'mp3') => {
@@ -614,36 +641,48 @@ export const VideoEditor: React.FC = () => {
               {files.map(f => {
                 const isSel = f.id === selectedId;
                 return (
-                  <button
-                    key={f.id}
-                    onClick={() => { stopPlayback(true); setSelectedId(f.id); }}
-                    className={`w-full p-2 rounded-xl text-left transition-all cursor-pointer flex items-center space-x-2.5 ${
-                      isSel
-                        ? 'bg-white dark:bg-zinc-800/90 shadow-xs border border-zinc-200/80 dark:border-zinc-700/80 ring-1'
-                        : 'hover:bg-white/50 dark:hover:bg-zinc-800/40 border border-transparent'
-                    }`}
-                    style={isSel ? { borderColor: accentColor } : {}}
-                  >
-                    {/* Thumbnail Preview */}
-                    <div className="w-12 h-8 rounded-lg bg-zinc-200 dark:bg-zinc-800 overflow-hidden shrink-0 flex items-center justify-center border border-zinc-300/60 dark:border-zinc-700/60 relative">
-                      {f.thumbnails.length > 0 ? (
-                        <img src={f.thumbnails[0]} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <Video className="w-4 h-4 text-zinc-400" />
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate" title={f.name}>
-                        {f.name}
-                      </p>
-                      <div className="flex items-center space-x-2 text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5">
-                        <span>{f.duration > 0 ? formatDurationHuman(f.duration) : '--'}</span>
-                        <span>·</span>
-                        <span>{f.height >= 2160 ? '4K' : f.height >= 1080 ? '1080p' : f.height >= 720 ? '720p' : `${f.width}x${f.height}`}</span>
+                  <div key={f.id} className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => { stopPlayback(true); setSelectedId(f.id); }}
+                      className={`w-full p-2 pr-9 rounded-xl text-left transition-all cursor-pointer flex items-center space-x-2.5 ${
+                        isSel
+                          ? 'bg-white dark:bg-zinc-800/90 shadow-xs border border-zinc-200/80 dark:border-zinc-700/80 ring-1'
+                          : 'hover:bg-white/50 dark:hover:bg-zinc-800/40 border border-transparent'
+                      }`}
+                      style={isSel ? { borderColor: accentColor } : {}}
+                    >
+                      {/* Thumbnail Preview */}
+                      <div className="w-12 h-8 rounded-lg bg-zinc-200 dark:bg-zinc-800 overflow-hidden shrink-0 flex items-center justify-center border border-zinc-300/60 dark:border-zinc-700/60 relative">
+                        {f.thumbnails.length > 0 ? (
+                          <img src={f.thumbnails[0]} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <Video className="w-4 h-4 text-zinc-400" />
+                        )}
                       </div>
-                    </div>
-                  </button>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate" title={f.name}>
+                          {f.name}
+                        </p>
+                        <div className="flex items-center space-x-2 text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5">
+                          <span>{f.duration > 0 ? formatDurationHuman(f.duration) : '--'}</span>
+                          <span>·</span>
+                          <span>{f.height >= 2160 ? '4K' : f.height >= 1080 ? '1080p' : f.height >= 720 ? '720p' : `${f.width}x${f.height}`}</span>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Remove button — appears on hover */}
+                    <button
+                      type="button"
+                      onClick={(e) => handleRemoveFile(f.id, e)}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-zinc-100/90 hover:bg-red-500/15 hover:text-red-500 text-zinc-400 dark:bg-zinc-800/90 dark:hover:bg-red-500/25 dark:hover:text-red-400 transition-all cursor-pointer z-10 shadow-xs"
+                      title="Remove video from editor"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 );
               })}
             </div>

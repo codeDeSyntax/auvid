@@ -25,6 +25,7 @@ import { VideoEditor } from "@/components/VideoEditor/VideoEditor";
 import { VideoCompressor } from "@/components/VideoCompressor/VideoCompressor";
 import { FormatConverter } from "@/components/FormatConverter/FormatConverter";
 import { SoundRecorder } from "@/components/SoundRecorder/SoundRecorder";
+import { FloatingJobManager } from "@/components/FloatingJob/FloatingJobManager";
 import { getAssetPath } from "@/utils/assets";
 
 /* ─────────────────────────── Tool card data ─────────────────────────── */
@@ -622,24 +623,50 @@ export const AuvidWorkspace: React.FC = () => {
       />
 
       <div className="relative z-10 flex-1 flex flex-col overflow-hidden no-scrollbar">
+        {/* Dashboard — shown conditionally (no persistent state needed) */}
         {activeTool === "dashboard" && Dashboard}
 
-        {activeTool === "audio-compress" && <AudioCompressor />}
+        {/* ── Persistently Mounted Tool Panels ─────────────────────────────── */}
+        {/* Each tool stays mounted in the DOM at all times; only display     */}
+        {/* is toggled. This preserves waveform caches, in-progress exports,  */}
+        {/* recording sessions, and all local React state across tab switches. */}
 
-        {activeTool === "video-compress" && <VideoCompressor />}
+        <div style={{ display: activeTool === "audio-compress" ? "flex" : "none" }} className="flex-1 flex flex-col overflow-hidden">
+          <AudioCompressor />
+        </div>
 
-        {activeTool === "audio-trim" && <AudioTrimmer />}
+        <div style={{ display: activeTool === "video-compress" ? "flex" : "none" }} className="flex-1 flex flex-col overflow-hidden">
+          <VideoCompressor />
+        </div>
 
-        {activeTool === "video-cut" && <VideoEditor />}
+        <div style={{ display: activeTool === "audio-trim" ? "flex" : "none" }} className="flex-1 flex flex-col overflow-hidden">
+          <AudioTrimmer />
+        </div>
 
-        {activeTool === "converter" && <FormatConverter />}
+        <div style={{ display: activeTool === "video-cut" ? "flex" : "none" }} className="flex-1 flex flex-col overflow-hidden">
+          <VideoEditor />
+        </div>
 
-        {activeTool === "metadata" && <MetadataEditor />}
+        <div style={{ display: activeTool === "converter" ? "flex" : "none" }} className="flex-1 flex flex-col overflow-hidden">
+          <FormatConverter />
+        </div>
 
-        {activeTool === "recorder" && <SoundRecorder />}
+        <div style={{ display: activeTool === "metadata" ? "flex" : "none" }} className="flex-1 flex flex-col overflow-hidden">
+          <MetadataEditor />
+        </div>
 
-        {activeTool === "settings" && <SettingsPage />}
+        <div style={{ display: activeTool === "recorder" ? "flex" : "none" }} className="flex-1 flex flex-col overflow-hidden">
+          <SoundRecorder />
+        </div>
+
+        <div style={{ display: activeTool === "settings" ? "flex" : "none" }} className="flex-1 flex flex-col overflow-hidden">
+          <SettingsPage />
+        </div>
       </div>
+
+      {/* Floating Background Task Indicators (bottom-right on other tabs) */}
+      <FloatingJobManager />
+
     </div>
   );
 };

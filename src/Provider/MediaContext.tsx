@@ -55,11 +55,12 @@ export const MediaProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const newItems: MediaItem[] = [];
 
     const AUDIO_EXTS = new Set([
-      'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wma',
-      'ac3', 'aiff', 'aif', 'alac', 'amr', 'ape', 'dts',
+      'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'aiff', 'aif', 'alac',
+      'ac3', 'amr', 'ape', 'dts', 'mp2', 'mp1', 'm4b', 'm4p', 'aifc', 'caf', 'pcm',
     ]);
     const VIDEO_EXTS = new Set([
-      'mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp',
+      'mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp', '3g2',
+      'mpg', 'mpeg', 'm2ts', 'ts', 'ogv', 'vob', 'asf', 'rm', 'rmvb', 'divx',
     ]);
 
     filesArr.forEach((file) => {

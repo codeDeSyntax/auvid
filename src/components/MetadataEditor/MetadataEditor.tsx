@@ -60,8 +60,15 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-const AUDIO_EXTS = new Set(['mp3', 'flac', 'wav', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'aiff', 'aif', 'alac']);
-const VIDEO_EXTS = new Set(['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v']);
+const AUDIO_EXTS = new Set([
+  'mp3', 'flac', 'wav', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'aiff', 'aif', 'alac',
+  'ac3', 'amr', 'ape', 'dts', 'mp2', 'mp1', 'm4b', 'm4p', 'aifc', 'caf', 'pcm',
+]);
+
+const VIDEO_EXTS = new Set([
+  'mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp', '3g2',
+  'mpg', 'mpeg', 'm2ts', 'ts', 'ogv', 'vob', 'asf', 'rm', 'rmvb', 'divx',
+]);
 
 const GENRES = [
   'Blues', 'Classic Rock', 'Country', 'Dance', 'Disco', 'Funk', 'Grunge',
@@ -159,52 +166,51 @@ export const MetadataEditor: React.FC = () => {
     }
   }, []);
 
-  // ── Directory scanning ────────────────────────────────────────────────────
+  // ── Directory scanning (current folder only) ──────────────────────────────
   const scanDirectory = useCallback(async (dir: string) => {
     if (!dir) return;
     setIsScanning(true);
     setFiles([]);
     setSelectedId(null);
 
+    let foundEntries: Array<{ name: string; path: string; size: number; isFile: boolean }> = [];
+
     try {
       const entries = await window.ipcRenderer?.invoke('fs:list-directory', dir) as Array<{
         name: string; path: string; size: number; isFile: boolean;
       }> | null;
 
-      if (!entries) {
-        setIsScanning(false);
-        return;
-      }
-
-      const mediaFiles: MetaFile[] = entries
-        .filter(e => e.isFile)
-        .map(e => {
-          const ext = e.name.split('.').pop()?.toLowerCase() ?? '';
-          const isAudio = AUDIO_EXTS.has(ext);
-          const isVideo = VIDEO_EXTS.has(ext);
-          if (!isAudio && !isVideo) return null;
-          return {
-            id: Math.random().toString(36).slice(2),
-            name: e.name,
-            path: e.path,
-            size: e.size,
-            format: ext.toUpperCase(),
-            type: isAudio ? 'audio' : 'video',
-            status: 'idle',
-          } as MetaFile;
-        })
-        .filter(Boolean) as MetaFile[];
-
-      setFiles(mediaFiles);
-      if (mediaFiles.length > 0) {
-        // Auto-select first item and load its tags
-        setSelectedId(mediaFiles[0].id);
-        loadMetadata(mediaFiles[0]);
-        // Background load cover art thumbnails for all files in list
-        loadAllThumbnails(mediaFiles);
+      if (entries) {
+        foundEntries = entries;
       }
     } catch (err) {
       console.error('[MetadataEditor] Scan error:', err);
+    }
+
+    const diskFiles: MetaFile[] = foundEntries
+      .filter(e => e.isFile)
+      .map(e => {
+        const ext = e.name.split('.').pop()?.toLowerCase() ?? '';
+        const isAudio = AUDIO_EXTS.has(ext);
+        const isVideo = VIDEO_EXTS.has(ext);
+        if (!isAudio && !isVideo) return null;
+        return {
+          id: Math.random().toString(36).slice(2),
+          name: e.name,
+          path: e.path,
+          size: e.size,
+          format: ext.toUpperCase(),
+          type: isAudio ? 'audio' : 'video',
+          status: 'idle',
+        } as MetaFile;
+      })
+      .filter(Boolean) as MetaFile[];
+
+    setFiles(diskFiles);
+    if (diskFiles.length > 0) {
+      setSelectedId(diskFiles[0].id);
+      loadMetadata(diskFiles[0]);
+      loadAllThumbnails(diskFiles);
     }
 
     setIsScanning(false);
@@ -242,9 +248,9 @@ export const MetadataEditor: React.FC = () => {
     resolveDir();
   }, []);
 
-  // Auto-scan when path is resolved
+  // Auto-scan when path is resolved or when mediaList changes
   useEffect(() => {
-    if (scanPath) scanDirectory(scanPath);
+    scanDirectory(scanPath);
   }, [scanPath, scanDirectory]);
 
   // ── Pick a different folder ───────────────────────────────────────────────

@@ -98,15 +98,19 @@ export const ConverterSettingsPanel: React.FC<ConverterSettingsPanelProps> = ({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-zinc-600 dark:text-zinc-400">Audio Bitrate</span>
-                <span className="font-mono font-bold">{settings.audioBitrate} kbps</span>
+                <span className="font-mono font-bold">
+                  {settings.audioBitrate === 0 ? 'Auto (Source)' : `${settings.audioBitrate} kbps`}
+                </span>
               </div>
               <select
                 value={settings.audioBitrate}
                 onChange={e => update({ audioBitrate: parseInt(e.target.value, 10) })}
                 className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl cursor-pointer"
               >
-                <option value={64}>64 kbps (Voice / Low)</option>
-                <option value={128}>128 kbps (Standard)</option>
+                <option value={0}>Auto (Match Source — Same Size)</option>
+                <option value={64}>64 kbps (Voice / Speech)</option>
+                <option value={96}>96 kbps (Compact Audio)</option>
+                <option value={128}>128 kbps (Standard MP3)</option>
                 <option value={192}>192 kbps (High Quality)</option>
                 <option value={256}>256 kbps (Near Lossless)</option>
                 <option value={320}>320 kbps (Studio MP3/AAC)</option>
@@ -116,13 +120,16 @@ export const ConverterSettingsPanel: React.FC<ConverterSettingsPanelProps> = ({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-zinc-600 dark:text-zinc-400">Sample Rate</span>
-                <span className="font-mono font-bold">{settings.audioSampleRate / 1000} kHz</span>
+                <span className="font-mono font-bold">
+                  {settings.audioSampleRate === 0 ? 'Original' : `${settings.audioSampleRate / 1000} kHz`}
+                </span>
               </div>
               <select
                 value={settings.audioSampleRate}
                 onChange={e => update({ audioSampleRate: parseInt(e.target.value, 10) })}
                 className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl cursor-pointer"
               >
+                <option value={0}>Original (Keep Source Sample Rate)</option>
                 <option value={44100}>44.1 kHz (CD Standard)</option>
                 <option value={48000}>48.0 kHz (Studio Video)</option>
                 <option value={96000}>96.0 kHz (Hi-Res Audio)</option>

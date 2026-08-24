@@ -41,10 +41,12 @@ async function loadFFmpeg() {
 // ─── Media file extensions ───────────────────────────────────────────────────
 const AUDIO_EXTS = new Set([
   'mp3', 'flac', 'wav', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'aiff', 'aif', 'alac',
+  'ac3', 'amr', 'ape', 'dts', 'mp2', 'mp1', 'm4b', 'm4p', 'aifc', 'caf', 'pcm',
 ]);
 
 const VIDEO_EXTS = new Set([
-  'mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v',
+  'mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp', '3g2',
+  'mpg', 'mpeg', 'm2ts', 'ts', 'ogv', 'vob', 'asf', 'rm', 'rmvb', 'divx',
 ]);
 
 const MEDIA_EXTS = new Set([...AUDIO_EXTS, ...VIDEO_EXTS]);
@@ -259,26 +261,31 @@ async function writeMetadataViaFfmpeg(
 
 // ─── Register all IPC handlers ────────────────────────────────────────────────
 export function registerMetadataEditorHandlers() {
-  // ── List directory contents ──
+  // ── List directory contents (direct folder files only, no subfolders) ──
   ipcMain.handle('fs:list-directory', async (_event, dirPath: string) => {
     try {
-      if (!dirPath || !fs.existsSync(dirPath)) return [];
+      if (!dirPath) return [];
+      if (!fs.existsSync(dirPath)) {
+        try { fs.mkdirSync(dirPath, { recursive: true }); } catch { /* ignore */ }
+      }
+      if (!fs.existsSync(dirPath)) return [];
+
       const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      return entries
-        .filter(e => e.isFile() || e.isDirectory())
-        .map(e => {
-          const fullPath = path.join(dirPath, e.name);
-          let size = 0;
-          if (e.isFile()) {
+      const mediaFiles: Array<{ name: string; path: string; size: number; isFile: boolean }> = [];
+
+      for (const entry of entries) {
+        if (entry.isFile()) {
+          const ext = entry.name.split('.').pop()?.toLowerCase() ?? '';
+          if (MEDIA_EXTS.has(ext)) {
+            const fullPath = path.join(dirPath, entry.name);
+            let size = 0;
             try { size = fs.statSync(fullPath).size; } catch { /* ignore */ }
+            mediaFiles.push({ name: entry.name, path: fullPath, size, isFile: true });
           }
-          return { name: e.name, path: fullPath, size, isFile: e.isFile() };
-        })
-        .filter(e => {
-          if (!e.isFile) return false;
-          const ext = e.name.split('.').pop()?.toLowerCase() ?? '';
-          return MEDIA_EXTS.has(ext);
-        });
+        }
+      }
+
+      return mediaFiles;
     } catch (err) {
       console.error('[MetadataEditor] fs:list-directory error:', err);
       return [];

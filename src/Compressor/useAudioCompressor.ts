@@ -1,9 +1,6 @@
-// ─── Audio Compressor — Custom React Hook ────────────────────────────────────
-// Manages all state, IPC calls, and progress events for the compressor UI.
-// Synced centrally with MediaContext for app-wide file consistency.
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useMediaContext } from '@/Provider/MediaContext';
+import { useJobStore } from '@/Provider/JobStore';
 import {
   AudioFileEntry,
   AudioCompressSettings,
@@ -47,6 +44,7 @@ export interface UseAudioCompressorReturn {
 
 export function useAudioCompressor(): UseAudioCompressorReturn {
   const { mediaList, addMediaFiles, removeMediaItem, clearAllMedia, addOutputFile } = useMediaContext();
+  const { reportJob, clearJob } = useJobStore();
 
   const [files, setFiles] = useState<AudioFileEntry[]>([]);
   const [globalSettings, setGlobalSettings] = useState<AudioCompressSettings>(DEFAULT_SETTINGS);
@@ -78,7 +76,7 @@ export function useAudioCompressor(): UseAudioCompressorReturn {
   useEffect(() => {
     const AUDIO_EXTS = new Set([
       'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wma',
-      'ac3', 'aiff', 'aif', 'alac', 'amr', 'ape', 'dts',
+      'ac3', 'aiff', 'aif', 'alac', 'amr', 'ape', 'dts', 'mpeg', 'mpg', 'mp2', 'mp1',
     ]);
 
     const audioItems = mediaList.filter(m => {
@@ -128,6 +126,13 @@ export function useAudioCompressor(): UseAudioCompressorReturn {
     if (!ipc) return;
 
     const onProgress = (_: unknown, data: CompressionProgress) => {
+      const pct = Math.min(100, Math.max(0, data.percent));
+      reportJob('audio-compress', {
+        status: 'processing',
+        progress: pct,
+        label: `Compressing audio (${Math.round(pct)}%)`,
+      });
+
       setFiles(prev =>
         prev.map(f =>
           f.id === data.fileId
@@ -139,6 +144,9 @@ export function useAudioCompressor(): UseAudioCompressorReturn {
 
     const onDone = (_: unknown, data: CompressionResult) => {
       activeIds.current.delete(data.fileId);
+      if (activeIds.current.size === 0) {
+        clearJob('audio-compress');
+      }
       setFiles(prev =>
         prev.map(f =>
           f.id === data.fileId
@@ -150,6 +158,9 @@ export function useAudioCompressor(): UseAudioCompressorReturn {
 
     const onError = (_: unknown, data: CompressionError) => {
       activeIds.current.delete(data.fileId);
+      if (activeIds.current.size === 0) {
+        clearJob('audio-compress');
+      }
       setFiles(prev =>
         prev.map(f =>
           f.id === data.fileId
@@ -168,7 +179,7 @@ export function useAudioCompressor(): UseAudioCompressorReturn {
       ipc.off('audio:compress-done', onDone);
       ipc.off('audio:compress-error', onError);
     };
-  }, []);
+  }, [reportJob, clearJob]);
 
   // ── Add files (via central MediaContext) ──────────────────────────────────
   const addFiles = useCallback(

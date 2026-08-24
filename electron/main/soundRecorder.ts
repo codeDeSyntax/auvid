@@ -67,17 +67,39 @@ function getTempRecDir(): string {
 }
 
 // ─── Save & Transcode Recording ──────────────────────────────────────────────
-export async function saveRecordingFile(payload: {
-  buffer: ArrayBuffer;
-  format: 'opus' | 'm4a' | 'mp3' | 'wav' | 'flac';
-  bitrateKbps?: number;
-  sampleRate?: number;
-  channels?: number;
-  customName?: string;
-}): Promise<{ path: string; name: string; size: number; duration: number }> {
+function parseTimemark(timemark: string): number {
+  if (!timemark) return 0;
+  const parts = timemark.split(':');
+  if (parts.length === 3) {
+    return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
+  }
+  return 0;
+}
+
+export async function saveRecordingFile(
+  payload: {
+    buffer: ArrayBuffer;
+    format: 'opus' | 'm4a' | 'mp3' | 'wav' | 'flac';
+    bitrateKbps?: number;
+    sampleRate?: number;
+    channels?: number;
+    customName?: string;
+    durationSec?: number;
+  },
+  event?: Electron.IpcMainInvokeEvent
+): Promise<{ path: string; name: string; size: number; duration: number }> {
   await loadFFmpeg();
 
-  const { buffer, format, bitrateKbps = 32, sampleRate = 48000, channels = 1, customName } = payload;
+  const {
+    buffer,
+    format,
+    bitrateKbps = 32,
+    sampleRate = 48000,
+    channels = 1,
+    customName,
+    durationSec = 0,
+  } = payload;
+
   const recDir = getRecordingsDir();
   const tempDir = getTempRecDir();
 
@@ -85,7 +107,7 @@ export async function saveRecordingFile(payload: {
   const baseName = customName && customName.trim() ? customName.trim() : `Recording_${timestamp}`;
 
   const extMap: Record<string, string> = {
-    opus: 'ogg',
+    opus: 'opus',
     m4a: 'm4a',
     mp3: 'mp3',
     wav: 'wav',
@@ -96,90 +118,136 @@ export async function saveRecordingFile(payload: {
   const finalFilename = `${baseName}.${finalExt}`;
   const finalPath = path.join(recDir, finalFilename);
 
-  // Write temporary raw input buffer (webm/ogg/wav recorded from MediaRecorder)
+  // Write temporary raw input buffer asynchronously
   const tempRawPath = path.join(tempDir, `raw_${Date.now()}.webm`);
-  fs.writeFileSync(tempRawPath, Buffer.from(buffer));
+  await fs.promises.writeFile(tempRawPath, Buffer.from(buffer));
 
-  return new Promise((resolve, reject) => {
-    let command = ffmpeg(tempRawPath);
+  const runFFmpeg = (useStreamCopy = false): Promise<{ path: string; name: string; size: number; duration: number }> => {
+    return new Promise((resolve, reject) => {
+      let command = ffmpeg(tempRawPath);
 
-    switch (format) {
-      case 'opus':
-        // WhatsApp-Grade Opus compression
-        command
-          .audioCodec('libopus')
-          .audioBitrate(`${bitrateKbps}k`)
-          .audioFrequency(sampleRate)
-          .audioChannels(channels)
-          .outputOptions(['-application voip', '-vbr on']);
-        break;
+      if (useStreamCopy && format === 'opus') {
+        // Fast Lossless Stream Copy (<0.5s instant save)
+        command.outputOptions(['-c:a copy', '-threads 0']);
+      } else {
+        switch (format) {
+          case 'opus':
+            command
+              .audioCodec('libopus')
+              .audioBitrate(`${bitrateKbps}k`)
+              .audioFrequency(sampleRate)
+              .audioChannels(channels)
+              .outputOptions(['-application voip', '-vbr on', '-threads 0']);
+            break;
 
-      case 'm4a':
-        command
-          .audioCodec('aac')
-          .audioBitrate(`${bitrateKbps || 128}k`)
-          .audioFrequency(sampleRate)
-          .audioChannels(channels);
-        break;
+          case 'm4a':
+            command
+              .audioCodec('aac')
+              .audioBitrate(`${bitrateKbps || 32}k`)
+              .audioFrequency(sampleRate)
+              .audioChannels(channels)
+              .outputOptions(['-threads 0']);
+            break;
 
-      case 'mp3':
-        command
-          .audioCodec('libmp3lame')
-          .audioBitrate(`${bitrateKbps || 192}k`)
-          .audioFrequency(sampleRate)
-          .audioChannels(channels);
-        break;
+          case 'mp3':
+            command
+              .audioCodec('libmp3lame')
+              .audioBitrate(`${bitrateKbps || 192}k`)
+              .audioFrequency(sampleRate)
+              .audioChannels(channels)
+              .outputOptions(['-threads 0', '-qscale:a 2']);
+            break;
 
-      case 'wav':
-        command
-          .audioCodec('pcm_s16le')
-          .audioFrequency(sampleRate)
-          .audioChannels(channels);
-        break;
+          case 'wav':
+            command
+              .audioCodec('pcm_s16le')
+              .audioFrequency(sampleRate)
+              .audioChannels(channels)
+              .outputOptions(['-threads 0']);
+            break;
 
-      case 'flac':
-        command
-          .audioCodec('flac')
-          .audioFrequency(sampleRate)
-          .audioChannels(channels);
-        break;
+          case 'flac':
+            command
+              .audioCodec('flac')
+              .audioFrequency(sampleRate)
+              .audioChannels(channels)
+              .outputOptions(['-threads 0', '-compression_level 5']);
+            break;
 
-      default:
-        command.audioBitrate(`${bitrateKbps}k`);
-        break;
-    }
-
-    command.on('end', () => {
-      try {
-        if (fs.existsSync(tempRawPath)) fs.unlinkSync(tempRawPath);
-      } catch (_) {}
-
-      let size = 0;
-      let duration = 0;
-      try {
-        if (fs.existsSync(finalPath)) {
-          size = fs.statSync(finalPath).size;
+          default:
+            command.audioBitrate(`${bitrateKbps}k`).outputOptions(['-threads 0']);
+            break;
         }
-      } catch (_) {}
+      }
 
-      ffmpeg.ffprobe(finalPath, (err: any, metadata: any) => {
-        if (!err && metadata?.format?.duration) {
-          duration = parseFloat(metadata.format.duration);
+      // Real-time Progress Tracking
+      command.on('progress', (progress: any) => {
+        let percent = 0;
+        if (progress.percent && progress.percent > 0) {
+          percent = Math.min(99, Math.max(1, Math.round(progress.percent)));
+        } else if (durationSec > 0 && progress.timemark) {
+          const currentSec = parseTimemark(progress.timemark);
+          percent = Math.min(99, Math.max(1, Math.round((currentSec / durationSec) * 100)));
         }
-        resolve({ path: finalPath, name: finalFilename, size, duration });
+
+        if (event?.sender && !event.sender.isDestroyed()) {
+          event.sender.send('recorder:save-progress', {
+            percent,
+            timemark: progress.timemark,
+          });
+        }
       });
-    });
 
-    command.on('error', (err: any) => {
+      command.on('end', () => {
+        try {
+          if (fs.existsSync(tempRawPath)) fs.unlinkSync(tempRawPath);
+        } catch (_) {}
+
+        let size = 0;
+        let finalDuration = durationSec;
+        try {
+          if (fs.existsSync(finalPath)) {
+            size = fs.statSync(finalPath).size;
+          }
+        } catch (_) {}
+
+        if (event?.sender && !event.sender.isDestroyed()) {
+          event.sender.send('recorder:save-progress', {
+            percent: 100,
+          });
+        }
+
+        resolve({ path: finalPath, name: finalFilename, size, duration: finalDuration });
+      });
+
+      command.on('error', (err: any) => {
+        reject(err);
+      });
+
+      command.save(finalPath);
+    });
+  };
+
+  try {
+    // Try fast stream copy first for opus
+    if (format === 'opus') {
       try {
-        if (fs.existsSync(tempRawPath)) fs.unlinkSync(tempRawPath);
-      } catch (_) {}
-      reject(new Error(`Failed to save recording: ${err.message}`));
-    });
-
-    command.save(finalPath);
-  });
+        return await runFFmpeg(true);
+      } catch (_) {
+        // Fallback to encode if stream copy fails
+        return await runFFmpeg(false);
+      }
+    } else {
+      return await runFFmpeg(false);
+    }
+  } catch (err: any) {
+    try {
+      if (fs.existsSync(tempRawPath)) fs.unlinkSync(tempRawPath);
+    } catch (_) {}
+    throw new Error(`Failed to save recording: ${err.message}`);
+  }
 }
+
 
 // ─── List Recordings ─────────────────────────────────────────────────────────
 export async function listRecordings(): Promise<any[]> {
@@ -215,7 +283,7 @@ export async function listRecordings(): Promise<any[]> {
 // ─── Register IPC Handlers ───────────────────────────────────────────────────
 export function registerSoundRecorderHandlers() {
   ipcMain.handle('recorder:save', async (_event, payload) => {
-    return await saveRecordingFile(payload);
+    return await saveRecordingFile(payload, _event);
   });
 
   ipcMain.handle('recorder:list', async () => {

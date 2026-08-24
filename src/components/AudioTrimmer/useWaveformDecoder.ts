@@ -8,6 +8,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+// ── Large-file threshold (30 minutes) ────────────────────────────────────────
+// Files longer than this skip the in-renderer decodeAudioData() path entirely.
+// Instead, server-side ffmpeg generates downsampled peaks via IPC.
+// Playback always uses the native <audio> element (unaffected).
+export const LARGE_FILE_THRESHOLD_SECS = 30 * 60; // 1800 seconds
+
 // ── Public types ──────────────────────────────────────────────────────────────
 
 export interface WaveformPeaks {
@@ -32,6 +38,7 @@ export interface UseWaveformResult {
   cachedPaths: Set<string>;
   reload: () => void;
   prefetch: (path: string) => void;
+  evict: (path: string) => Promise<void>;
 }
 
 interface CacheRecord {
@@ -141,6 +148,10 @@ class WaveformLRUCache {
     return this.map.has(key);
   }
 
+  delete(key: string): void {
+    this.map.delete(key);
+  }
+
   keys(): string[] {
     return Array.from(this.map.keys());
   }
@@ -153,6 +164,23 @@ class WaveformLRUCache {
 
 const memoryCache = new WaveformLRUCache();
 const inFlightDecodes = new Map<string, Promise<CacheRecord>>();
+
+/**
+ * Removes a file's waveform data from both the in-memory LRU cache and
+ * the IndexedDB persistent cache. Call this when the user removes a file
+ * from the trimmer's file list.
+ */
+export async function evictWaveformCache(filePath: string): Promise<void> {
+  memoryCache.delete(filePath);
+  inFlightDecodes.delete(filePath);
+  try {
+    const db = await getDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(filePath);
+  } catch {
+    // Ignore errors — cache eviction is best-effort
+  }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -223,15 +251,61 @@ export function getSharedAudioContext(): AudioContext {
 }
 
 /**
+ * Fast duration check via IPC ffprobe (no cover art, sub-100ms).
+ * Returns 0 if the check fails or IPC is unavailable.
+ */
+async function getFileDurationFast(filePath: string): Promise<number> {
+  try {
+    const info = (await window.ipcRenderer?.invoke('trim:get-info-fast', filePath)) as
+      | { duration: number }
+      | null;
+    return info?.duration ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Server-side waveform peaks via IPC (for large files).
+ * Returns peaks + info without any in-renderer audio decoding.
+ */
+async function fetchServerPeaks(filePath: string, resolution = 1400): Promise<CacheRecord | null> {
+  try {
+    const result = (await window.ipcRenderer?.invoke('trim:get-waveform-peaks', filePath, resolution)) as
+      | { mins: number[]; maxs: number[]; duration: number; sampleRate: number; channels: number }
+      | null;
+    if (!result) return null;
+
+    const peaks: WaveformPeaks = {
+      mins: new Float32Array(result.mins),
+      maxs: new Float32Array(result.maxs),
+      length: result.mins.length,
+    };
+    const info: WaveformInfo = {
+      duration: result.duration,
+      sampleRate: result.sampleRate,
+      channels: result.channels,
+    };
+    return { peaks, audioBuffer: null, info };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Decode audio directly in Chromium's C++ audio decoding engine.
  * Single pass gives both peak visualization and ready-to-play AudioBuffer.
  * Fully deduplicated — concurrent calls share the exact same decode promise.
+ * For files longer than LARGE_FILE_THRESHOLD_SECS, uses the server-side
+ * ffmpeg fast path instead (no decodeAudioData, no giant RAM allocation).
  */
 async function decodeAudio(
   filePath: string,
 ): Promise<CacheRecord> {
   const cached = memoryCache.get(filePath);
   if (cached && cached.audioBuffer) return cached;
+  // Also accept large-file cache hits (audioBuffer is null but peaks are valid)
+  if (cached && cached.peaks) return cached;
 
   if (inFlightDecodes.has(filePath)) {
     return inFlightDecodes.get(filePath)!;
@@ -239,6 +313,20 @@ async function decodeAudio(
 
   const promise = (async () => {
     try {
+      // ── Large-file fast path: skip in-renderer audio decode ──────────────
+      // Check duration first (fast ffprobe call, ~50ms)
+      const fastDuration = await getFileDurationFast(filePath);
+      if (fastDuration > LARGE_FILE_THRESHOLD_SECS) {
+        const serverRecord = await fetchServerPeaks(filePath);
+        if (serverRecord) {
+          memoryCache.set(filePath, serverRecord);
+          // Persist peaks to IndexedDB for instant future loads
+          saveStoredPeaks(filePath, serverRecord.peaks, serverRecord.info).catch(() => {});
+          return serverRecord;
+        }
+        // If server-side fails for some reason, fall through to normal decode
+      }
+
       let arrayBuffer: ArrayBuffer | null = null;
 
       // 1. Direct Node.js filesystem read via IPC (fastest, 0ms network overhead, 100% reliable)
@@ -338,6 +426,11 @@ export function useWaveformDecoder(filePath: string | null): UseWaveformResult {
       .catch(() => {});
   }, []);
 
+  const evict = useCallback(async (path: string) => {
+    await evictWaveformCache(path);
+    setCachedPaths(new Set(memoryCache.keys()));
+  }, []);
+
   useEffect(() => {
     if (!filePath) {
       setPeaks(null);
@@ -405,7 +498,7 @@ export function useWaveformDecoder(filePath: string | null): UseWaveformResult {
     };
   }, [filePath, reloadKey]);
 
-  return { peaks, audioBuffer, info, isLoading, isRefining, error, cachedPaths, reload, prefetch };
+  return { peaks, audioBuffer, info, isLoading, isRefining, error, cachedPaths, reload, prefetch, evict };
 }
 
 /**

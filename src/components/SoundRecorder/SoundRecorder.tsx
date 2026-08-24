@@ -1,19 +1,16 @@
-// ─── SoundRecorder.tsx ──────────────────────────────────────────────────────
-// High-end Studio Sound Recorder with 3D tactile acoustic fins ribbon,
-// floating glassmorphic console, full light/dark theme support, and Opus voice compression.
-
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Mic, Play, Pause, Square, RotateCcw,
   Download, Scissors, FolderOpen, Trash2,
   RefreshCw, CheckCircle2, Radio, Sparkles,
-  Sliders, Music, ChevronDown, Check
+  Sliders, Music, ChevronDown, Check, Disc, Loader2
 } from 'lucide-react';
 import { useTheme } from '@/Provider/Theme';
 import { useMediaContext } from '@/Provider/MediaContext';
 import { useSoundRecorder } from './useSoundRecorder';
 import { LiveWaveformVisualizer } from './LiveWaveformVisualizer';
 import { RECORDING_PRESETS, RecordingPreset } from '@/types/soundRecorder';
+import { CustomDropdown, DropdownOption } from '@/components/common/CustomDropdown';
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 B';
@@ -51,6 +48,7 @@ export const SoundRecorder: React.FC = () => {
     previewProgress,
     savedRecordings,
     isSaving,
+    saveProgress,
     startRecording,
     pauseRecording,
     resumeRecording,
@@ -66,6 +64,30 @@ export const SoundRecorder: React.FC = () => {
   const [customName, setCustomName] = useState('');
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [deviceDropdownOpen, setDeviceDropdownOpen] = useState(false);
+
+  const presetOptions: DropdownOption<string>[] = useMemo(() => {
+    return RECORDING_PRESETS.map((p) => ({
+      value: p.id,
+      label: p.name,
+      sublabel: `${p.bitrateKbps} kbps · ${
+        p.bitrateKbps <= 48
+          ? '~240 KB/min'
+          : p.bitrateKbps <= 128
+          ? '~960 KB/min'
+          : p.bitrateKbps <= 192
+          ? '~1.4 MB/min'
+          : '~10.8 MB/min'
+      } · ${p.channels === 1 ? 'Mono' : 'Stereo'}`,
+      badge: `.${p.format.toUpperCase()}`,
+    }));
+  }, []);
+
+  const handlePresetChange = (presetId: string) => {
+    const found = RECORDING_PRESETS.find((p) => p.id === presetId);
+    if (found && !isRecording) {
+      setActivePreset(found);
+    }
+  };
 
   const handleSave = async () => {
     const result = await saveRecording(customName);
@@ -108,27 +130,16 @@ export const SoundRecorder: React.FC = () => {
           </div>
         </div>
 
-        {/* Center Mode Pills */}
-        <div className="hidden md:flex items-center space-x-1 p-1 rounded-full bg-zinc-200/80 dark:bg-zinc-900/90 border border-zinc-300/80 dark:border-zinc-800/80 backdrop-blur-md">
-          {RECORDING_PRESETS.map((preset) => {
-            const isSelected = activePreset.id === preset.id;
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => !isRecording && setActivePreset(preset)}
-                disabled={isRecording}
-                className={`px-3.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs'
-                    : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
-                } disabled:opacity-40`}
-                style={isSelected ? { color: accentColor } : {}}
-              >
-                {preset.name.split(' ')[0]}
-              </button>
-            );
-          })}
+        {/* Center Sleek Preset Select Dropdown */}
+        <div className="hidden md:block w-72">
+          <CustomDropdown
+            value={activePreset.id}
+            options={presetOptions}
+            onChange={handlePresetChange}
+            disabled={isRecording}
+            buttonClassName="!py-2 !px-4 !rounded-full !bg-white/90 dark:!bg-zinc-900/90 !border-zinc-200 dark:!border-zinc-800 backdrop-blur-md shadow-xs text-xs font-semibold"
+            menuClassName="!rounded-2xl !mt-2 shadow-2xl !w-80"
+          />
         </div>
 
         {/* Right Section: Open Recordings Folder + Microphone Device Pill */}
@@ -214,7 +225,7 @@ export const SoundRecorder: React.FC = () => {
               </span>
               <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800/80 text-[10px] font-bold text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700/50">
                 <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: isRecording ? '#ef4444' : accentColor }} />
-                <span>{activePreset.format.toUpperCase()}</span>
+                <span>.{activePreset.format.toUpperCase()}</span>
               </div>
             </div>
 
@@ -228,39 +239,18 @@ export const SoundRecorder: React.FC = () => {
             </div>
           </div>
 
-          {/* Preset Buttons Grid */}
-          <div className="grid grid-cols-4 gap-1.5 pt-1">
-            {RECORDING_PRESETS.map((preset) => {
-              const isSelected = activePreset.id === preset.id;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => !isRecording && setActivePreset(preset)}
-                  disabled={isRecording}
-                  className={`py-1.5 rounded-xl text-[10px] font-bold font-mono uppercase transition-all cursor-pointer border ${
-                    isSelected
-                      ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-400 dark:border-zinc-600 shadow-sm'
-                      : 'bg-zinc-100 dark:bg-zinc-950/60 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800/80 hover:bg-zinc-200/80 dark:hover:bg-zinc-800/60'
-                  } disabled:opacity-40`}
-                  style={isSelected ? { borderColor: accentColor, color: accentColor } : {}}
-                >
-                  {preset.id === 'compact-voice' ? 'Voice Note' : preset.id === 'podcast' ? 'Podcast' : preset.id === 'standard-mp3' ? 'MP3' : 'WAV'}
-                </button>
-              );
-            })}
-          </div>
-
           {/* Metadata Rows with Hairline Dividers */}
           <div className="pt-2 pb-1 space-y-2 text-xs font-mono border-t border-zinc-200/90 dark:border-zinc-800/80">
             <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400">
-              <span className="text-[11px]">Compression</span>
+              <span className="text-[11px]">Active Profile</span>
               <span className="text-zinc-900 dark:text-zinc-200 font-bold">{activePreset.name}</span>
             </div>
 
             <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400">
-              <span className="text-[11px]">Bitrate / Mode</span>
-              <span className="text-zinc-800 dark:text-zinc-200">{activePreset.bitrateKbps} kbps (VoIP VBR)</span>
+              <span className="text-[11px]">Bitrate / Est. Size</span>
+              <span className="text-zinc-800 dark:text-zinc-200">
+                {activePreset.bitrateKbps} kbps ({activePreset.bitrateKbps <= 48 ? '~240 KB/min' : activePreset.bitrateKbps <= 128 ? '~960 KB/min' : activePreset.bitrateKbps <= 192 ? '~1.4 MB/min' : '~10.8 MB/min'})
+              </span>
             </div>
 
             <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400">
@@ -270,11 +260,14 @@ export const SoundRecorder: React.FC = () => {
 
             <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400">
               <span className="text-[11px]">Noise Suppression</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold">Active Hardware Gate</span>
+              <span className={activePreset.noiseSuppression ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-zinc-400"}>
+                {activePreset.noiseSuppression ? "Active Hardware Gate" : "Direct Pass-through"}
+              </span>
             </div>
           </div>
 
           {/* Lower Section (Output info & Scrubber) */}
+
           <div className="p-3 rounded-2xl bg-zinc-100/70 dark:bg-zinc-950/70 border border-zinc-200 dark:border-zinc-800/80 space-y-2">
             <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
               <span>Output Destination</span>
@@ -363,10 +356,29 @@ export const SoundRecorder: React.FC = () => {
                   onClick={handleSave}
                   disabled={isSaving}
                   style={{ backgroundColor: accentColor }}
-                  className="w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider text-black shadow-lg hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center space-x-2"
+                  className="relative w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider text-black shadow-lg hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center space-x-2 overflow-hidden select-none disabled:cursor-wait"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>SAVE RECORDING</span>
+                  {/* Subtle in-button progress fill */}
+                  {isSaving && (
+                    <div
+                      className="absolute inset-0 bg-black/15 transition-all duration-200 ease-out pointer-events-none"
+                      style={{ width: `${Math.max(5, saveProgress)}%` }}
+                    />
+                  )}
+
+                  <div className="relative z-10 flex items-center justify-center space-x-2">
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-black" />
+                        <span>{saveProgress > 0 ? `SAVING RECORDING… ${saveProgress}%` : 'OPTIMIZING & SAVING…'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-3.5 h-3.5" />
+                        <span>SAVE RECORDING</span>
+                      </>
+                    )}
+                  </div>
                 </button>
 
                 <div className="flex items-center space-x-2">

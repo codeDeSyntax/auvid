@@ -221,10 +221,21 @@ export async function processConversion(
     }
     // ── 2. Audio-to-Audio or Video-to-Audio Extraction ──
     else if (isTargetAudio) {
+      // Determine effective audio bitrate to match source and prevent size inflation
+      let targetBitrateK = 128; // fallback
+      if (settings.audioBitrate && settings.audioBitrate > 0) {
+        targetBitrateK = settings.audioBitrate;
+      } else if (probe.audioBitrate && probe.audioBitrate > 0) {
+        targetBitrateK = Math.round(probe.audioBitrate / 1000);
+      } else if (probe.size > 0 && duration > 0) {
+        // Calculate bitrate from file size and duration: (bytes * 8) / seconds / 1000
+        targetBitrateK = Math.min(320, Math.max(32, Math.round((probe.size * 8) / duration / 1000)));
+      }
+
       // Audio codec mapping
       switch (targetFormat.toLowerCase()) {
         case 'mp3':
-          command.audioCodec('libmp3lame').audioBitrate(`${settings.audioBitrate || 256}k`);
+          command.audioCodec('libmp3lame').audioBitrate(`${targetBitrateK}k`);
           break;
         case 'wav':
           command.audioCodec('pcm_s16le');
@@ -234,13 +245,13 @@ export async function processConversion(
           break;
         case 'aac':
         case 'm4a':
-          command.audioCodec('aac').audioBitrate(`${settings.audioBitrate || 256}k`);
+          command.audioCodec('aac').audioBitrate(`${targetBitrateK}k`);
           break;
         case 'opus':
-          command.audioCodec('libopus').audioBitrate(`${settings.audioBitrate || 160}k`);
+          command.audioCodec('libopus').audioBitrate(`${Math.min(targetBitrateK, 160)}k`);
           break;
         case 'ogg':
-          command.audioCodec('libvorbis').audioBitrate(`${settings.audioBitrate || 192}k`);
+          command.audioCodec('libvorbis').audioBitrate(`${targetBitrateK}k`);
           break;
         case 'aiff':
           command.audioCodec('pcm_s16be');
@@ -249,14 +260,14 @@ export async function processConversion(
           command.audioCodec('alac');
           break;
         case 'ac3':
-          command.audioCodec('ac3').audioBitrate(`${settings.audioBitrate || 384}k`);
+          command.audioCodec('ac3').audioBitrate(`${targetBitrateK}k`);
           break;
         default:
-          command.audioBitrate(`${settings.audioBitrate || 192}k`);
+          command.audioBitrate(`${targetBitrateK}k`);
           break;
       }
 
-      if (settings.audioSampleRate) {
+      if (settings.audioSampleRate && settings.audioSampleRate > 0) {
         command.audioFrequency(settings.audioSampleRate);
       }
       if (settings.audioChannels === 'mono') {
@@ -377,13 +388,27 @@ export function registerFormatConverterHandlers() {
         {
           name: 'All Media Files',
           extensions: [
-            'mp4', 'mkv', 'mov', 'avi', 'webm', 'wmv', 'flv', 'm4v', 'ts', '3gp',
-            'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'aiff', 'alac', 'ac3'
+            'mp4', 'mkv', 'mov', 'avi', 'webm', 'wmv', 'flv', 'm4v', 'ts', '3gp', '3g2',
+            'mpg', 'mpeg', 'm2ts', 'vob', 'ogv', 'asf', 'rm', 'rmvb', 'divx',
+            'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'aiff', 'aif', 'alac',
+            'ac3', 'amr', 'ape', 'dts', 'mp2', 'mp1', 'm4b', 'm4p', 'aifc', 'caf', 'pcm'
           ],
         },
-        { name: 'Audio Files', extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'aiff', 'alac', 'ac3'] },
-        { name: 'Video Files', extensions: ['mp4', 'mkv', 'mov', 'avi', 'webm', 'wmv', 'flv', 'm4v', 'ts', '3gp'] },
-        { name: 'All Files', extensions: ['*'] },
+        {
+          name: 'Audio Files',
+          extensions: [
+            'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'aiff', 'aif', 'alac',
+            'ac3', 'amr', 'ape', 'dts', 'mp2', 'mp1', 'm4b', 'm4p', 'aifc', 'caf', 'pcm'
+          ]
+        },
+        {
+          name: 'Video Files',
+          extensions: [
+            'mp4', 'mkv', 'mov', 'avi', 'webm', 'wmv', 'flv', 'm4v', 'ts', '3gp', '3g2',
+            'mpg', 'mpeg', 'm2ts', 'vob', 'ogv', 'asf', 'rm', 'rmvb', 'divx'
+          ]
+        },
+        { name: 'All Files (*.*)', extensions: ['*'] },
       ],
     });
     return result.canceled ? null : result.filePaths;

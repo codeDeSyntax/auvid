@@ -1,7 +1,5 @@
-// ─── useVideoCompressor.ts ──────────────────────────────────────────────────
-// React hook managing video compression queue, settings, probes, and IPC execution.
-
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useJobStore } from '@/Provider/JobStore';
 import {
   VideoCompressFileEntry,
   VideoCompressSettings,
@@ -29,6 +27,7 @@ const DEFAULT_SETTINGS: VideoCompressSettings = {
 };
 
 export function useVideoCompressor() {
+  const { reportJob, clearJob } = useJobStore();
   const [files, setFiles] = useState<VideoCompressFileEntry[]>([]);
   const [settings, setSettings] = useState<VideoCompressSettings>(DEFAULT_SETTINGS);
   const [hwInfo, setHwInfo] = useState<HWAccelInfo | null>(null);
@@ -54,6 +53,13 @@ export function useVideoCompressor() {
       fps?: number;
       speed?: string;
     }) => {
+      const pct = Math.min(100, Math.max(0, data.percent));
+      reportJob('video-compress', {
+        status: 'processing',
+        progress: pct,
+        label: `Compressing video (${Math.round(pct)}%)`,
+      });
+
       setFiles((prev) =>
         prev.map((f) => {
           if (f.id === data.jobId) {
@@ -74,7 +80,7 @@ export function useVideoCompressor() {
     return () => {
       window.ipcRenderer?.off?.('video-compress:progress', handler);
     };
-  }, []);
+  }, [reportJob]);
 
   // Add video files & probe them asynchronously
   const addFiles = useCallback(async (filePaths: string[]) => {
@@ -216,9 +222,10 @@ export function useVideoCompressor() {
       } finally {
         setIsProcessing(false);
         setCurrentJobId(null);
+        clearJob('video-compress');
       }
     },
-    [settings]
+    [settings, clearJob]
   );
 
   // Process all files in queue sequentially
@@ -231,7 +238,8 @@ export function useVideoCompressor() {
       await processSingle(file);
     }
     setIsProcessing(false);
-  }, [files, processSingle]);
+    clearJob('video-compress');
+  }, [files, processSingle, clearJob]);
 
   const cancelJob = useCallback(async (jobId: string) => {
     try {

@@ -1,7 +1,5 @@
-// ─── useFormatConverter.ts ──────────────────────────────────────────────────
-// React hook managing format converter queue, settings, probes, and batch jobs.
-
 import { useState, useEffect, useCallback } from 'react';
+import { useJobStore } from '@/Provider/JobStore';
 import {
   ConverterFileEntry,
   ConverterSettings,
@@ -10,8 +8,8 @@ import {
 } from '@/types/formatConverter';
 
 const DEFAULT_SETTINGS: ConverterSettings = {
-  audioBitrate: 256,
-  audioSampleRate: 44100,
+  audioBitrate: 0,              // 0 = Auto (Match source bitrate to preserve file size)
+  audioSampleRate: 0,           // 0 = Original source sample rate
   audioChannels: 'original',
   videoCodec: 'auto',
   videoCrf: 22,
@@ -24,6 +22,7 @@ const DEFAULT_SETTINGS: ConverterSettings = {
 };
 
 export function useFormatConverter() {
+  const { reportJob, clearJob } = useJobStore();
   const [files, setFiles] = useState<ConverterFileEntry[]>([]);
   const [globalTargetFormat, setGlobalTargetFormat] = useState<TargetFormat>('mp3');
   const [settings, setSettings] = useState<ConverterSettings>(DEFAULT_SETTINGS);
@@ -38,6 +37,13 @@ export function useFormatConverter() {
       fps?: number;
       speed?: string;
     }) => {
+      const pct = Math.min(100, Math.max(0, data.percent));
+      reportJob('converter', {
+        status: 'processing',
+        progress: pct,
+        label: `Converting format (${Math.round(pct)}%)`,
+      });
+
       setFiles((prev) =>
         prev.map((f) => {
           if (f.id === data.jobId) {
@@ -58,7 +64,7 @@ export function useFormatConverter() {
     return () => {
       window.ipcRenderer?.off?.('converter:progress', handler);
     };
-  }, []);
+  }, [reportJob]);
 
   // Add files & probe them
   const addFiles = useCallback(async (filePaths: string[]) => {
@@ -200,9 +206,10 @@ export function useFormatConverter() {
         );
       } finally {
         setIsProcessing(false);
+        clearJob('converter');
       }
     },
-    [settings]
+    [settings, clearJob]
   );
 
   // Process all files in queue sequentially
@@ -215,7 +222,8 @@ export function useFormatConverter() {
       await processSingle(file);
     }
     setIsProcessing(false);
-  }, [files, processSingle]);
+    clearJob('converter');
+  }, [files, processSingle, clearJob]);
 
   const cancelJob = useCallback(async (jobId: string) => {
     try {

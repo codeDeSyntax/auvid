@@ -65,7 +65,160 @@ function getTrimOutputDir(): string {
   return audioDir;
 }
 
+// ─── Server-side waveform peak generation (for large files) ───────────────────
+// Pipes ffmpeg's downsampled float32 stream for the full file and computes
+// min/max peaks per column — returns only ~11 KB regardless of file size.
+// This is the same technique used by Audacity and DaVinci Resolve.
+interface WaveformPeakResult {
+  mins: number[];
+  maxs: number[];
+  duration: number;
+  sampleRate: number;
+  channels: number;
+}
+
+async function generateWaveformPeaks(
+  filePath: string,
+  resolution = 1400,
+): Promise<WaveformPeakResult> {
+  await loadFFmpeg();
+  if (!ffmpegPath) throw new Error('ffmpeg not available');
+
+  // Probe duration/channels first (fast, ~50ms)
+  const probeInfo = await new Promise<{ duration: number; sampleRate: number; channels: number }>((resolve, reject) => {
+    if (!ffprobePath) return reject(new Error('ffprobe not available'));
+    const args = ['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', filePath];
+    let stdout = '';
+    const proc = spawn(ffprobePath, args, { windowsHide: true });
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+    proc.on('close', (code: number) => {
+      if (code !== 0) return reject(new Error(`ffprobe exited ${code}`));
+      try {
+        const data = JSON.parse(stdout);
+        const audio = (data.streams ?? []).find((s: { codec_type?: string }) => s.codec_type === 'audio') as
+          | { sample_rate?: string; channels?: number }
+          | undefined;
+        resolve({
+          duration: parseFloat(data.format?.duration ?? '0'),
+          sampleRate: parseInt(audio?.sample_rate ?? '44100', 10),
+          channels: audio?.channels ?? 2,
+        });
+      } catch (e) {
+        reject(e);
+      }
+    });
+    proc.on('error', reject);
+  });
+
+  // ── Streaming peak accumulator ────────────────────────────────────────────
+  // Key insight: we NEVER accumulate raw samples. Instead we compute peaks
+  // on-the-fly as each chunk arrives, advancing through pixel buckets.
+  // Memory usage: O(resolution) = ~11 KB regardless of file size.
+  //
+  // For a 3-hour file @ 8 kHz mono:
+  //   totalSamples ≈ 86.4 million, samplesPerPx ≈ 61 714
+  //   RangeError was caused by building an 86M-element JS array — now gone.
+  const SAMPLE_RATE = 8000;
+  const totalExpectedSamples = Math.ceil(probeInfo.duration * SAMPLE_RATE);
+  const samplesPerPx = Math.max(1, Math.floor(totalExpectedSamples / resolution));
+
+  const mins = new Float32Array(resolution).fill(0);
+  const maxs = new Float32Array(resolution).fill(0);
+
+  // Running state
+  let currentPx = 0;
+  let samplesInPx = 0;
+  let currentMin = 1;
+  let currentMax = -1;
+  let totalSamplesProcessed = 0;
+
+  // Carry-over buffer for partial float32 across chunk boundaries
+  let carry = Buffer.alloc(0);
+
+  function commitPixel() {
+    if (currentPx < resolution) {
+      mins[currentPx] = currentMin === 1 ? 0 : currentMin;
+      maxs[currentPx] = currentMax === -1 ? 0 : currentMax;
+    }
+    currentPx++;
+    samplesInPx = 0;
+    currentMin = 1;
+    currentMax = -1;
+  }
+
+  function processBuffer(buf: Buffer) {
+    let offset = 0;
+    while (offset + 3 < buf.length) {
+      const s = buf.readFloatLE(offset);
+      offset += 4;
+      totalSamplesProcessed++;
+
+      // Clamp NaN/Inf (can appear at file boundaries)
+      const v = isFinite(s) ? Math.max(-1, Math.min(1, s)) : 0;
+      if (v < currentMin) currentMin = v;
+      if (v > currentMax) currentMax = v;
+      samplesInPx++;
+
+      if (samplesInPx >= samplesPerPx && currentPx < resolution) {
+        commitPixel();
+      }
+    }
+    // Save leftover bytes (incomplete float32) for next chunk
+    carry = buf.slice(offset);
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const args = [
+      '-i', filePath,
+      '-vn',               // no video
+      '-ac', '1',          // mono
+      '-ar', String(SAMPLE_RATE),
+      '-f', 'f32le',       // raw 32-bit float little-endian
+      'pipe:1',
+    ];
+    const proc = spawn(ffmpegPath!, args, {
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+
+    proc.stdout.on('data', (chunk: Buffer) => {
+      // Prepend any leftover carry bytes from previous chunk
+      const buf = carry.length > 0 ? Buffer.concat([carry, chunk]) : chunk;
+      carry = Buffer.alloc(0);
+      processBuffer(buf);
+    });
+
+    proc.on('close', () => {
+      // Flush carry (should be 0-3 bytes, safely ignorable)
+      // Commit the final partial pixel if it has data
+      if (samplesInPx > 0 && currentPx < resolution) {
+        commitPixel();
+      }
+      // Fill any remaining pixels with 0 (silence, e.g. duration estimate was off)
+      while (currentPx < resolution) {
+        mins[currentPx] = 0;
+        maxs[currentPx] = 0;
+        currentPx++;
+      }
+      resolve();
+    });
+
+    proc.on('error', reject);
+  });
+
+  if (totalSamplesProcessed === 0) throw new Error('No audio samples decoded from file');
+
+  return {
+    mins: Array.from(mins),
+    maxs: Array.from(maxs),
+    duration: probeInfo.duration,
+    sampleRate: probeInfo.sampleRate,
+    channels: probeInfo.channels,
+  };
+}
+
 // ─── Extract embedded cover art via ffmpeg ────────────────────────────────────
+
 async function extractCoverArt(filePath: string): Promise<string | null> {
   if (!ffmpegPath) return null;
 
@@ -405,6 +558,56 @@ export async function registerAudioTrimmerHandlers() {
     }
   });
 
+  // ── trim:get-info-fast — ffprobe only, no cover art (sub-100ms) ──────────
+  ipcMain.handle('trim:get-info-fast', async (_event, filePath: string) => {
+    try {
+      if (!filePath || !fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
+      await loadFFmpeg();
+      return await new Promise((resolve, reject) => {
+        if (!ffprobePath) return reject(new Error('ffprobe not available'));
+        const args = ['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', filePath];
+        let stdout = '';
+        const proc = spawn(ffprobePath, args, { windowsHide: true });
+        proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+        proc.on('close', (code: number) => {
+          if (code !== 0) return reject(new Error(`ffprobe exited ${code}`));
+          try {
+            const data = JSON.parse(stdout);
+            const audio = (data.streams ?? []).find((s: { codec_type?: string }) => s.codec_type === 'audio') as
+              | { codec_name?: string; sample_rate?: string; channels?: number }
+              | undefined;
+            resolve({
+              duration: parseFloat(data.format?.duration ?? '0'),
+              bitrate: Math.round(parseFloat(data.format?.bit_rate ?? '0') / 1000),
+              sampleRate: parseInt(audio?.sample_rate ?? '44100', 10),
+              channels: audio?.channels ?? 2,
+              codec: audio?.codec_name ?? 'unknown',
+              format: data.format?.format_name?.split(',')[0] ?? 'unknown',
+              coverArt: null,
+            });
+          } catch (e) { reject(e); }
+        });
+        proc.on('error', reject);
+      });
+    } catch (err) {
+      console.error('[AudioTrimmer] trim:get-info-fast error:', err);
+      throw err;
+    }
+  });
+
+  // ── trim:get-waveform-peaks — server-side downsampled peak generation ──────
+  // For large files this bypasses in-renderer decodeAudioData() entirely.
+  // Returns ~11 KB of peak data regardless of source file size.
+  ipcMain.handle('trim:get-waveform-peaks', async (_event, filePath: string, resolution: number = 1400) => {
+    try {
+      if (!filePath || !fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
+      return await generateWaveformPeaks(filePath, resolution);
+    } catch (err) {
+      console.error('[AudioTrimmer] trim:get-waveform-peaks error:', err);
+      throw err;
+    }
+  });
+
   // ── trim:cancel ────────────────────────────────────────────────────────────
   ipcMain.handle('trim:cancel', async (_event, exportId?: string) => {
     if (exportId && activeExports.has(exportId)) {
@@ -485,7 +688,11 @@ export function cleanupAudioTrimmer() {
     activeExports.delete(id);
   }
   // Remove all IPC handlers
-  for (const ch of ['trim:get-info', 'trim:get-cover', 'trim:read-file-buffer', 'trim:export', 'trim:cancel', 'dialog:open-audio-file', 'dialog:open-audio-files']) {
+  for (const ch of [
+    'trim:get-info', 'trim:get-info-fast', 'trim:get-cover', 'trim:read-file-buffer',
+    'trim:export', 'trim:cancel', 'trim:get-waveform-peaks',
+    'dialog:open-audio-file', 'dialog:open-audio-files',
+  ]) {
     try { ipcMain.removeHandler(ch); } catch (_) {}
   }
 }

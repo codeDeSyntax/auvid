@@ -10,9 +10,10 @@ import {
   Volume2, Scissors, Upload, FolderOpen,
   RotateCcw, Loader2, AlertCircle, Music,
   ChevronRight, Waves, Download, RefreshCw,
-  Repeat, ArrowRight, CheckCircle2, Sliders
+  Repeat, ArrowRight, CheckCircle2, Sliders, X
 } from 'lucide-react';
 import { useTheme } from '@/Provider/Theme';
+import { useJobStore } from '@/Provider/JobStore';
 import { WaveformCanvas, formatTime, formatDurationHuman } from './WaveformCanvas';
 import { useWaveformDecoder, filePathToMediaUrl, ensurePlaybackBuffer, getSharedAudioContext } from './useWaveformDecoder';
 import { AudioTrimConfirmModal } from './AudioTrimConfirmModal';
@@ -32,7 +33,7 @@ interface TrimFile {
 type ExportStatus = 'idle' | 'exporting' | 'done' | 'error';
 
 const AUDIO_EXTS = new Set([
-  'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'aiff', 'alac', 'ac3',
+  'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'aiff', 'aif', 'alac', 'ac3', 'mpeg', 'mpg', 'mp2', 'mp1',
 ]);
 
 function formatBytes(bytes: number): string {
@@ -104,6 +105,7 @@ const TimecodeInput: React.FC<{
 // ═══════════════════════════════════════════════════════════════════════════════
 export const AudioTrimmer: React.FC = () => {
   const { accentColor, isDarkMode } = useTheme();
+  const { reportJob, clearJob } = useJobStore();
 
   // ── File list ──────────────────────────────────────────────────────────────
   const [files, setFiles] = useState<TrimFile[]>([]);
@@ -113,11 +115,28 @@ export const AudioTrimmer: React.FC = () => {
   const selectedFile = files.find(f => f.id === selectedId) ?? null;
 
   // ── Waveform & audio ───────────────────────────────────────────────────────
-  const { peaks, audioBuffer, info, isLoading, isRefining, error, cachedPaths, reload, prefetch } = useWaveformDecoder(
+  const { peaks, audioBuffer, info, isLoading, isRefining, error, cachedPaths, reload, prefetch, evict } = useWaveformDecoder(
     selectedFile?.path ?? null,
   );
 
   const duration = info?.duration ?? audioBuffer?.duration ?? selectedFile?.duration ?? 0;
+
+  // ── Remove file from list + evict waveform cache ───────────────────────────────────────
+  const handleRemoveFile = useCallback(async (id: string, path: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    stopPlayback(true);
+    await evict(path);
+    setFiles(prev => {
+      const remaining = prev.filter(f => f.id !== id);
+      if (id === selectedId) {
+        const removedIdx = prev.findIndex(f => f.id === id);
+        const next = remaining[removedIdx] ?? remaining[removedIdx - 1] ?? null;
+        setSelectedId(next?.id ?? null);
+      }
+      return remaining;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evict, selectedId]);
 
   // ── Background loader for cover art thumbnails ────────────────────────────
   useEffect(() => {
@@ -407,14 +426,17 @@ export const AudioTrimmer: React.FC = () => {
   useEffect(() => {
     const handler = (_event: unknown, data: { percent?: number }) => {
       if (typeof data?.percent === 'number') {
-        setExportProgress(Math.min(100, Math.max(0, data.percent)));
+        const pct = Math.min(100, Math.max(0, data.percent));
+        setExportProgress(pct);
+        // Broadcast to sidebar badge
+        reportJob('audio-trim', { status: 'processing', progress: pct, label: 'Trimming…' });
       }
     };
     window.ipcRenderer?.on?.('trim:progress', handler);
     return () => {
       window.ipcRenderer?.off?.('trim:progress', handler);
     };
-  }, []);
+  }, [reportJob]);
 
   const handleExecuteTrim = useCallback(async (overrideMode?: 'new-file' | 'in-place') => {
     if (!selectedFile || duration <= 0) return;
@@ -442,6 +464,7 @@ export const AudioTrimmer: React.FC = () => {
         setExportPath(result.outputPath);
         setIsOverwritten(true);
         setExportStatus('done');
+        clearJob('audio-trim');
 
         // Update file entry in sidebar with new duration/size
         if (result.newDuration || result.newSize) {
@@ -458,12 +481,14 @@ export const AudioTrimmer: React.FC = () => {
         setExportPath(result?.outputPath ?? null);
         setIsOverwritten(false);
         setExportStatus('done');
+        clearJob('audio-trim');
       }
     } catch (err) {
       console.error('[AudioTrimmer] Export error:', err);
       setExportStatus('error');
+      reportJob('audio-trim', { status: 'error', progress: 0, label: 'Failed' });
     }
-  }, [selectedFile, duration, region, fades, gain, outputFormat, saveMode, cutAction, selectedId, reload, stopPlayback]);
+  }, [selectedFile, duration, region, fades, gain, outputFormat, saveMode, cutAction, selectedId, reload, stopPlayback, reportJob, clearJob]);
 
   // ── Seek & Drag Handler ───────────────────────────────────────────────────
   const handleSeek = useCallback((time: number, isDragging = false) => {
@@ -548,53 +573,78 @@ export const AudioTrimmer: React.FC = () => {
                 const isCached = cachedPaths.has(f.path);
                 const isSelected = f.id === selectedId;
                 return (
-                  <button
+                  <div
                     key={f.id}
-                    onClick={() => { stopPlayback(true); setSelectedId(f.id); }}
-                    className={`w-full flex items-center space-x-2.5 px-3 py-2.5 text-left transition-colors cursor-pointer ${
+                    className={`group w-full flex items-center space-x-2.5 px-3 py-2.5 transition-colors relative ${
                       isSelected
                         ? 'bg-zinc-100 dark:bg-zinc-800/60'
                         : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/30'
                     }`}
                   >
-                    {/* Cover art image or fallback Waves icon */}
-                    <div
-                      className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shrink-0 border border-zinc-200/60 dark:border-zinc-700/60 bg-zinc-100 dark:bg-zinc-800"
-                      style={{
-                        backgroundColor: isSelected && !f.coverArt ? `${accentColor}22` : undefined,
-                        color: isSelected && !f.coverArt ? accentColor : '#71717a',
-                      }}
+                    {/* Select area */}
+                    <button
+                      type="button"
+                      onClick={() => { stopPlayback(true); setSelectedId(f.id); }}
+                      className="flex items-center space-x-2.5 flex-1 min-w-0 text-left cursor-pointer"
                     >
-                      {f.coverArt ? (
-                        <img
-                          src={f.coverArt}
-                          alt={f.name}
-                          className="w-full h-full object-cover"
+                      {/* Cover art image or fallback Waves icon */}
+                      <div
+                        className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shrink-0 border border-zinc-200/60 dark:border-zinc-700/60 bg-zinc-100 dark:bg-zinc-800"
+                        style={{
+                          backgroundColor: isSelected && !f.coverArt ? `${accentColor}22` : undefined,
+                          color: isSelected && !f.coverArt ? accentColor : '#71717a',
+                        }}
+                      >
+                        {f.coverArt ? (
+                          <img
+                            src={f.coverArt}
+                            alt={f.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Waves className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-semibold text-zinc-900 dark:text-zinc-100 truncate leading-tight" title={f.name}>
+                          {f.name}
+                        </p>
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                          {f.duration > 0 ? formatTime(f.duration) : formatBytes(f.size)}
+                        </p>
+                      </div>
+                      {/* Cache/selection indicator — hidden when remove button is showing */}
+                      {isCached && !isSelected && (
+                        <CheckCircle2
+                          className="w-3 h-3 shrink-0 ml-auto opacity-60 group-hover:opacity-0 transition-opacity"
+                          style={{ color: accentColor }}
+                          aria-label="Waveform cached — instant switch"
                         />
-                      ) : (
-                        <Waves className="w-4 h-4" />
                       )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-semibold text-zinc-900 dark:text-zinc-100 truncate leading-tight" title={f.name}>
-                        {f.name}
-                      </p>
-                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                        {f.duration > 0 ? formatTime(f.duration) : formatBytes(f.size)}
-                      </p>
-                    </div>
-                    {/* Cache indicator: green tick when waveform is pre-loaded */}
-                    {isCached && !isSelected && (
-                      <CheckCircle2
-                        className="w-3 h-3 shrink-0 ml-auto opacity-60"
-                        style={{ color: accentColor }}
-                        aria-label="Waveform cached — instant switch"
-                      />
-                    )}
-                    {isSelected && (
-                      <ChevronRight className="w-3 h-3 shrink-0 ml-auto" style={{ color: accentColor }} />
-                    )}
-                  </button>
+                      {isSelected && (
+                        <ChevronRight
+                          className="w-3 h-3 shrink-0 ml-auto group-hover:opacity-0 transition-opacity"
+                          style={{ color: accentColor }}
+                        />
+                      )}
+                    </button>
+
+                    {/* Remove button — appears on hover, replaces indicator */}
+                    <button
+                      type="button"
+                      onClick={(e) => handleRemoveFile(f.id, f.path, e)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2
+                                 w-6 h-6 rounded-lg flex items-center justify-center
+                                 opacity-0 group-hover:opacity-100 transition-all duration-150
+                                 bg-zinc-100 hover:bg-red-50 dark:bg-zinc-800 dark:hover:bg-red-900/30
+                                 text-zinc-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400
+                                 cursor-pointer shadow-xs border border-zinc-200/60 dark:border-zinc-700/60
+                                 hover:border-red-200 dark:hover:border-red-800/60"
+                      title={`Remove "${f.name}" and clear its waveform cache`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
                 );
               })}
             </div>
