@@ -8,7 +8,7 @@ import React from 'react';
 import {
   Scissors, Video, Mic, RefreshCw, Layers,
   Minimize2, Tag, ExternalLink, Play, Pause,
-  Square, CheckCircle2, AlertCircle, X
+  Square, CheckCircle2, AlertCircle, X, DownloadCloud
 } from 'lucide-react';
 import { useTheme } from '@/Provider/Theme';
 import { useMediaContext } from '@/Provider/MediaContext';
@@ -24,6 +24,12 @@ interface ToolThemeConfig {
 }
 
 const TOOL_CONFIGS: Record<MediaTool, ToolThemeConfig> = {
+  'downloader': {
+    name: 'Media Downloader',
+    color: '#38bdf8', // Sky Blue
+    bgGradient: 'from-sky-500/20 to-blue-500/10',
+    icon: DownloadCloud,
+  },
   'recorder': {
     name: 'Sound Recorder',
     color: '#8b5cf6', // Violet

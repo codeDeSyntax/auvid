@@ -13,6 +13,7 @@ import { registerVideoEditorHandlers, cleanupVideoEditor } from "./videoEditor.j
 import { registerVideoCompressorHandlers, cleanupVideoCompressor } from "./videoCompressor.js";
 import { registerFormatConverterHandlers, cleanupFormatConverter } from "./formatConverter.js";
 import { registerSoundRecorderHandlers, cleanupSoundRecorder } from "./soundRecorder.js";
+import { registerMediaDownloaderHandlers, cleanupMediaDownloader } from "./mediaDownloader.js";
 
 // Register media:// scheme as privileged for streaming local audio/video files in audio player
 protocol.registerSchemesAsPrivileged([
@@ -250,6 +251,7 @@ async function createMainWindow() {
     cleanupAudioCompressor();
     cleanupMetadataEditor();
     cleanupAudioTrimmer();
+    cleanupMediaDownloader();
   });
 
   // IPC handler for getting system fonts
@@ -283,6 +285,9 @@ async function createMainWindow() {
 
   // Register sound recorder IPC handlers
   registerSoundRecorderHandlers();
+
+  // Register universal media downloader IPC handlers
+  registerMediaDownloaderHandlers();
 
   // Handle external links
   mainWin.webContents.setWindowOpenHandler(({ url }) => {

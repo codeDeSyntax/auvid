@@ -1,13 +1,14 @@
 // ─── FormatConverter.tsx ──────────────────────────────────────────────────
 // High-performance Universal Format Converter studio for audio, video, soundtrack extraction, and GIFs.
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   Upload, FolderOpen, Play, CheckCircle2,
   Trash2, Sparkles, Loader2, RefreshCw, Layers,
   HardDrive, Zap, Info, ArrowRightLeft, ArrowRight
 } from 'lucide-react';
 import { useTheme } from '@/Provider/Theme';
+import { useMediaContext } from '@/Provider/MediaContext';
 import { useFormatConverter } from './useFormatConverter';
 import { ConverterFileRow } from './ConverterFileRow';
 import { ConverterSettingsPanel } from './ConverterSettingsPanel';
@@ -29,6 +30,7 @@ function formatBytes(bytes: number): string {
 
 export const FormatConverter: React.FC = () => {
   const { accentColor } = useTheme();
+  const { mediaList } = useMediaContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -46,6 +48,19 @@ export const FormatConverter: React.FC = () => {
     processSingle,
     processBatch,
   } = useFormatConverter();
+
+  // Sync files from global media context (Downloader, Home, etc.)
+  useEffect(() => {
+    if (mediaList.length > 0) {
+      const existingPaths = new Set(files.map((f) => f.path));
+      const newPaths = mediaList
+        .map((m) => m.path)
+        .filter((p) => Boolean(p) && !existingPaths.has(p));
+      if (newPaths.length > 0) {
+        addFiles(newPaths);
+      }
+    }
+  }, [mediaList]);
 
   // Confirmation Modal State
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);

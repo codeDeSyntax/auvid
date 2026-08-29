@@ -1,6 +1,7 @@
 import React, { useRef } from "react";
 import {
   AppstoreOutlined,
+  CloudDownloadOutlined,
   CompressOutlined,
   CustomerServiceOutlined,
   ScissorOutlined,
@@ -25,6 +26,7 @@ interface NavItem {
 
 const primaryNav: NavItem[] = [
   { id: "dashboard", label: "Studio", icon: <AppstoreOutlined /> },
+  { id: "downloader", label: "Media Downloader", icon: <CloudDownloadOutlined /> },
   { id: "audio-compress", label: "Audio Compressor", icon: <CustomerServiceOutlined /> },
   { id: "video-compress", label: "Video Compressor", icon: <CompressOutlined /> },
   { id: "audio-trim", label: "Audio Trimmer", icon: <ScissorOutlined /> },

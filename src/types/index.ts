@@ -1,4 +1,4 @@
-export type MediaTool = 'dashboard' | 'audio-compress' | 'video-compress' | 'audio-trim' | 'video-cut' | 'converter' | 'recorder' | 'metadata' | 'settings';
+export type MediaTool = 'dashboard' | 'downloader' | 'audio-compress' | 'video-compress' | 'audio-trim' | 'video-cut' | 'converter' | 'recorder' | 'metadata' | 'settings';
 
 export interface MediaItem {
   id: string;

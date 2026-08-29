@@ -4,7 +4,15 @@
   "asar": true,
   "asarUnpack": [
     "**/node_modules/ffmpeg-static/**/*",
-    "**/node_modules/ffprobe-static/**/*"
+    "**/node_modules/ffprobe-static/**/*",
+    "**/resources/binaries/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "resources/binaries",
+      "to": "binaries",
+      "filter": ["**/*"]
+    }
   ],
   "directories": {
     "output": "release/${version}"

@@ -25,6 +25,7 @@ import { VideoEditor } from "@/components/VideoEditor/VideoEditor";
 import { VideoCompressor } from "@/components/VideoCompressor/VideoCompressor";
 import { FormatConverter } from "@/components/FormatConverter/FormatConverter";
 import { SoundRecorder } from "@/components/SoundRecorder/SoundRecorder";
+import { MediaDownloader } from "@/components/MediaDownloader/MediaDownloader";
 import { FloatingJobManager } from "@/components/FloatingJob/FloatingJobManager";
 import { getAssetPath } from "@/utils/assets";
 
@@ -39,6 +40,14 @@ interface ToolCard {
 }
 
 const TOOLS: ToolCard[] = [
+  {
+    key: "downloader",
+    title: "Media Downloader",
+    subtitle: "Download 4K, 1080p video and studio audio from YouTube, TikTok, X, 1000+ sites",
+    imageLight: getAssetPath("cards/light/format-converter.jpg"),
+    imageDark: getAssetPath("cards/dark/format-converter.jpg"),
+    badge: "New",
+  },
   {
     key: "audio-compress",
     title: "Audio Compressor",
@@ -630,6 +639,10 @@ export const AuvidWorkspace: React.FC = () => {
         {/* Each tool stays mounted in the DOM at all times; only display     */}
         {/* is toggled. This preserves waveform caches, in-progress exports,  */}
         {/* recording sessions, and all local React state across tab switches. */}
+
+        <div style={{ display: activeTool === "downloader" ? "flex" : "none" }} className="flex-1 flex flex-col overflow-hidden">
+          <MediaDownloader />
+        </div>
 
         <div style={{ display: activeTool === "audio-compress" ? "flex" : "none" }} className="flex-1 flex flex-col overflow-hidden">
           <AudioCompressor />

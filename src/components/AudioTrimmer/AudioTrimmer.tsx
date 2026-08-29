@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/Provider/Theme';
 import { useJobStore } from '@/Provider/JobStore';
+import { useMediaContext } from '@/Provider/MediaContext';
 import { WaveformCanvas, formatTime, formatDurationHuman } from './WaveformCanvas';
 import { useWaveformDecoder, filePathToMediaUrl, ensurePlaybackBuffer, getSharedAudioContext } from './useWaveformDecoder';
 import { AudioTrimConfirmModal } from './AudioTrimConfirmModal';
@@ -106,11 +107,46 @@ const TimecodeInput: React.FC<{
 export const AudioTrimmer: React.FC = () => {
   const { accentColor, isDarkMode } = useTheme();
   const { reportJob, clearJob } = useJobStore();
+  const { mediaList, selectedMedia } = useMediaContext();
 
   // ── File list ──────────────────────────────────────────────────────────────
   const [files, setFiles] = useState<TrimFile[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Synchronize audio files from global media context (Downloader, Home, etc.)
+  useEffect(() => {
+    if (mediaList.length > 0) {
+      const audioItems = mediaList.filter(
+        m => m.type === 'audio' || (m.format ? AUDIO_EXTS.has(m.format.toLowerCase()) : false) || AUDIO_EXTS.has(m.name.split('.').pop()?.toLowerCase() || '')
+      );
+      if (audioItems.length > 0) {
+        setFiles(prev => {
+          const existingPaths = new Set(prev.map(p => p.path));
+          const newEntries: TrimFile[] = audioItems
+            .filter(item => !existingPaths.has(item.path))
+            .map(item => ({
+              id: item.id,
+              name: item.name,
+              path: item.path,
+              size: item.size || 0,
+              duration: item.duration || 0,
+            }));
+          if (newEntries.length > 0) {
+            return [...prev, ...newEntries];
+          }
+          return prev;
+        });
+
+        // Auto select the active item
+        if (selectedMedia && (selectedMedia.type === 'audio' || (selectedMedia.format ? AUDIO_EXTS.has(selectedMedia.format.toLowerCase()) : false))) {
+          setSelectedId(selectedMedia.id);
+        } else if (!selectedId && audioItems.length > 0) {
+          setSelectedId(audioItems[0].id);
+        }
+      }
+    }
+  }, [mediaList, selectedMedia]);
 
   const selectedFile = files.find(f => f.id === selectedId) ?? null;
 

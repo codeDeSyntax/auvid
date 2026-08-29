@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/Provider/Theme';
 import { useJobStore } from '@/Provider/JobStore';
+import { useMediaContext } from '@/Provider/MediaContext';
 import { VideoTimeline, formatTime, formatDurationHuman } from './VideoTimeline';
 import { VideoTrimConfirmModal } from './VideoTrimConfirmModal';
 import type { VideoRegion } from './VideoTimeline';
@@ -117,11 +118,80 @@ const TimecodeInput: React.FC<{
 export const VideoEditor: React.FC = () => {
   const { accentColor, isDarkMode } = useTheme();
   const { reportJob, clearJob } = useJobStore();
+  const { mediaList, selectedMedia } = useMediaContext();
 
   // ── Files state ─────────────────────────────────────────────────────────────
   const [files, setFiles] = useState<VideoFile[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Synchronize video files from global media context (Downloader, Home, etc.)
+  useEffect(() => {
+    if (mediaList.length > 0) {
+      const videoItems = mediaList.filter(
+        m => m.type === 'video' || (m.format ? VIDEO_EXTS.has(m.format.toLowerCase()) : false) || VIDEO_EXTS.has(m.name.split('.').pop()?.toLowerCase() || '')
+      );
+      if (videoItems.length > 0) {
+        videoItems.forEach(async (item) => {
+          setFiles((prev) => {
+            if (prev.some((p) => p.path === item.path)) return prev;
+            return prev; // Handled below asynchronously
+          });
+
+          // Check if already in files
+          setFiles((prev) => {
+            if (prev.some((p) => p.path === item.path)) return prev;
+
+            const newFile: VideoFile = {
+              id: item.id,
+              name: item.name,
+              path: item.path,
+              size: item.size || 0,
+              duration: item.duration || 0,
+              width: 1920,
+              height: 1080,
+              aspectRatio: '16:9',
+              fps: 30,
+              videoCodec: 'auto',
+              audioCodec: 'auto',
+              thumbnails: [],
+            };
+
+            // Async probe info
+            window.ipcRenderer?.invoke('video:get-info', item.path).then((info: any) => {
+              if (info) {
+                setFiles((curr) =>
+                  curr.map((f) =>
+                    f.id === item.id
+                      ? {
+                          ...f,
+                          duration: info.duration || f.duration,
+                          width: info.width || f.width,
+                          height: info.height || f.height,
+                          aspectRatio: info.aspectRatio || f.aspectRatio,
+                          fps: info.fps || f.fps,
+                          videoCodec: info.videoCodec || f.videoCodec,
+                          audioCodec: info.audioCodec || f.audioCodec,
+                        }
+                      : f
+                  )
+                );
+              }
+            }).catch(() => {});
+
+            return [...prev, newFile];
+          });
+        });
+
+        // Auto select active item
+        if (selectedMedia && (selectedMedia.type === 'video' || (selectedMedia.format ? VIDEO_EXTS.has(selectedMedia.format.toLowerCase()) : false))) {
+          setSelectedId(selectedMedia.id);
+        } else if (!selectedId && videoItems.length > 0) {
+          setSelectedId(videoItems[0].id);
+        }
+      }
+    }
+  }, [mediaList, selectedMedia]);
 
   const selectedFile = files.find(f => f.id === selectedId) ?? null;
   const duration = selectedFile?.duration ?? 0;
