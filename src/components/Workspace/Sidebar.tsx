@@ -26,6 +26,7 @@ interface NavItem {
 
 const primaryNav: NavItem[] = [
   { id: "dashboard", label: "Studio", icon: <AppstoreOutlined /> },
+  { id: "files", label: "Workspace Files", icon: <FolderOpenOutlined /> },
   { id: "downloader", label: "Media Downloader", icon: <CloudDownloadOutlined /> },
   { id: "audio-compress", label: "Audio Compressor", icon: <CustomerServiceOutlined /> },
   { id: "video-compress", label: "Video Compressor", icon: <CompressOutlined /> },
