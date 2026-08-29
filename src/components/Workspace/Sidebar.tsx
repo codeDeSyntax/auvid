@@ -12,6 +12,7 @@ import {
   TagsOutlined,
   SettingOutlined,
   PlusOutlined,
+  FolderOpenOutlined,
 } from "@ant-design/icons";
 import { useTheme } from "@/Provider/Theme";
 import { useMediaContext } from "@/Provider/MediaContext";

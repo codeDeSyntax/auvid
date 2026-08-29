@@ -78,6 +78,12 @@ const TOOL_CONFIGS: Record<MediaTool, ToolThemeConfig> = {
     bgGradient: 'from-zinc-500/20 to-zinc-500/10',
     icon: Layers,
   },
+  'files': {
+    name: 'Workspace Files',
+    color: '#06b6d4',
+    bgGradient: 'from-cyan-500/20 to-sky-500/10',
+    icon: Layers,
+  },
   'settings': {
     name: 'Settings',
     color: '#71717a',
