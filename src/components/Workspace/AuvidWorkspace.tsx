@@ -328,7 +328,7 @@ export const AuvidWorkspace: React.FC = () => {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="relative flex-1 flex flex-col bg-zinc-50/90 dark:bg-zinc-950/95 text-zinc-900 dark:text-zinc-100 rounded-tl-3xl border-t border-l border-zinc-200/80 dark:border-zinc-800/80 shadow-xs overflow-hidden select-none"
+      className="relative flex-1 flex flex-col bg-zinc-50/90 dark:bg-zinc-950/95 text-zinc-900 dark:text-zinc-100 rounded-tl-3xl rounded-tr-3xl border-t border-l border-r border-zinc-200/80 dark:border-zinc-800/80 shadow-xs overflow-hidden select-none"
     >
       {/* Hidden file picker input for Dashboard Upload Media button */}
       <input
@@ -357,8 +357,8 @@ export const AuvidWorkspace: React.FC = () => {
         </div>
       )}
 
-      {/* ── Top-Left Ambient Accent Glow Spotlight (Shows for all tools except Media Downloader) ── */}
-      {activeTool !== "downloader" && (
+      {/* ── Top-Left Ambient Accent Glow Spotlight (Disabled for Downloader & Video Editor) ── */}
+      {activeTool !== "downloader" && activeTool !== "video-cut" && (
         <div
           className="pointer-events-none absolute -top-24 -left-20 w-[550px] h-[420px] rounded-full blur-3xl opacity-25 dark:opacity-30 transition-all duration-700 select-none z-0"
           style={{

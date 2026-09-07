@@ -223,6 +223,24 @@ export interface VideoExportOptions {
   gain?: number; // 0.0 to 3.0
   outputFormat?: string | null;
   resolution?: 'original' | '1080p' | '720p' | '480p';
+  // Clipchamp Upgrade extensions
+  colorAdjustments?: {
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
+    vibrance?: number;
+    temperature?: number;
+    preset?: string;
+  };
+  bgmPath?: string | null;
+  bgmVolume?: number;
+  audioFadeIn?: number;
+  audioFadeOut?: number;
+  canvasRatio?: string;
+  canvasFillMode?: string;
+  flipH?: boolean;
+  flipV?: boolean;
+  rotateDeg?: 0 | 90 | 180 | 270;
 }
 
 export async function exportVideoTrim(
@@ -242,6 +260,15 @@ export async function exportVideoTrim(
     gain = 1.0,
     outputFormat = null,
     resolution = 'original',
+    colorAdjustments,
+    bgmPath,
+    bgmVolume = 0.4,
+    audioFadeIn = 0,
+    audioFadeOut = 0,
+    canvasRatio,
+    flipH = false,
+    flipV = false,
+    rotateDeg = 0,
   } = options;
 
   const info = await getVideoInfo(inputPath);
@@ -272,8 +299,30 @@ export async function exportVideoTrim(
   const hasSpeed = Math.abs(speed - 1.0) > 0.02;
   const hasAudioGain = Math.abs(gain - 1.0) > 0.02;
   const hasResolutionChange = resolution !== 'original';
+  const hasColor = Boolean(
+    colorAdjustments && (
+      (colorAdjustments.brightness && colorAdjustments.brightness !== 0) ||
+      (colorAdjustments.contrast && colorAdjustments.contrast !== 0) ||
+      (colorAdjustments.saturation && colorAdjustments.saturation !== 0) ||
+      (colorAdjustments.temperature && colorAdjustments.temperature !== 0)
+    )
+  );
+  const hasTransform = Boolean(rotateDeg !== 0 || flipH || flipV);
+  const hasCanvas = Boolean(canvasRatio && canvasRatio !== '16:9');
+  const hasBgm = Boolean(bgmPath && fs.existsSync(bgmPath));
+  const hasFades = Boolean(audioFadeIn > 0 || audioFadeOut > 0);
 
-  const canLosslessCopy = isSameFormat && !hasSpeed && !hasAudioGain && !hasResolutionChange && cutMode === 'keep-selection';
+  const canLosslessCopy =
+    isSameFormat &&
+    !hasSpeed &&
+    !hasAudioGain &&
+    !hasResolutionChange &&
+    !hasColor &&
+    !hasTransform &&
+    !hasCanvas &&
+    !hasBgm &&
+    !hasFades &&
+    cutMode === 'keep-selection';
 
   const targetLength = cutMode === 'delete-selection'
     ? Math.max(0.1, totalDuration - (outPoint - inPoint))
@@ -314,9 +363,51 @@ export async function exportVideoTrim(
         if (hasSpeed) {
           vFilters.push(`setpts=${(1 / speed).toFixed(4)}*PTS`);
         }
-        if (resolution === '1080p') vFilters.push('scale=-2:1080');
-        else if (resolution === '720p') vFilters.push('scale=-2:720');
-        else if (resolution === '480p') vFilters.push('scale=-2:480');
+
+        // Transforms
+        if (rotateDeg === 90) vFilters.push('transpose=1');
+        else if (rotateDeg === 180) vFilters.push('hflip,vflip');
+        else if (rotateDeg === 270) vFilters.push('transpose=2');
+
+        if (flipH) vFilters.push('hflip');
+        if (flipV) vFilters.push('vflip');
+
+        // Color adjustments
+        if (colorAdjustments) {
+          const { brightness = 0, contrast = 0, saturation = 0, temperature = 0 } = colorAdjustments;
+          if (brightness !== 0 || contrast !== 0 || saturation !== 0) {
+            const b = (brightness / 100 * 0.5).toFixed(3);
+            const c = (1 + contrast / 100).toFixed(3);
+            const s = Math.max(0, 1 + saturation / 100).toFixed(3);
+            vFilters.push(`eq=brightness=${b}:contrast=${c}:saturation=${s}`);
+          }
+          if (temperature !== 0) {
+            const rr = (1 + temperature * 0.003).toFixed(3);
+            const bb = (1 - temperature * 0.003).toFixed(3);
+            vFilters.push(`colorchannelmixer=rr=${rr}:bb=${bb}`);
+          }
+        }
+
+        // Canvas & aspect ratio
+        if (canvasRatio && canvasRatio !== '16:9') {
+          if (canvasRatio === '9:16') {
+            vFilters.push('scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black');
+          } else if (canvasRatio === '1:1') {
+            vFilters.push('scale=1080:1080:force_original_aspect_ratio=decrease,pad=1080:1080:(ow-iw)/2:(oh-ih)/2:black');
+          } else if (canvasRatio === '4:5') {
+            vFilters.push('scale=1080:1350:force_original_aspect_ratio=decrease,pad=1080:1350:(ow-iw)/2:(oh-ih)/2:black');
+          } else if (canvasRatio === '4:3') {
+            vFilters.push('scale=1440:1080:force_original_aspect_ratio=decrease,pad=1440:1080:(ow-iw)/2:(oh-ih)/2:black');
+          } else if (canvasRatio === '21:9') {
+            vFilters.push('scale=2560:1080:force_original_aspect_ratio=decrease,pad=2560:1080:(ow-iw)/2:(oh-ih)/2:black');
+          }
+        } else if (resolution === '1080p') {
+          vFilters.push('scale=-2:1080');
+        } else if (resolution === '720p') {
+          vFilters.push('scale=-2:720');
+        } else if (resolution === '480p') {
+          vFilters.push('scale=-2:480');
+        }
 
         if (vFilters.length > 0) {
           cmd = cmd.videoFilters(vFilters.join(','));
@@ -330,6 +421,14 @@ export async function exportVideoTrim(
         if (hasAudioGain) {
           aFilters.push(`volume=${gain.toFixed(4)}`);
         }
+        if (audioFadeIn > 0) {
+          aFilters.push(`afade=t=in:st=0:d=${audioFadeIn.toFixed(2)}`);
+        }
+        if (audioFadeOut > 0) {
+          const fadeStart = Math.max(0, targetLength - audioFadeOut);
+          aFilters.push(`afade=t=out:st=${fadeStart.toFixed(2)}:d=${audioFadeOut.toFixed(2)}`);
+        }
+
         if (aFilters.length > 0) {
           cmd = cmd.audioFilters(aFilters.join(','));
         }
@@ -411,6 +510,109 @@ export async function exportVideoTrim(
   });
 }
 
+// ─── Export Multi-Clip Sequence ───────────────────────────────────────────────
+export interface SequenceClipOption {
+  filePath: string;
+  inPoint: number;
+  outPoint: number;
+  speed?: number;
+  gain?: number;
+}
+
+export interface SequenceExportOptions {
+  clips: SequenceClipOption[];
+  outputFormat?: string;
+  resolution?: 'original' | '1080p' | '720p' | '480p';
+  canvasRatio?: string;
+  canvasFillMode?: string;
+  bgmPath?: string | null;
+  bgmVolume?: number;
+  audioFadeIn?: number;
+  audioFadeOut?: number;
+}
+
+export async function exportVideoSequence(
+  options: SequenceExportOptions,
+  onProgress?: (percent: number) => void,
+): Promise<{ outputPath: string; newSize?: number }> {
+  await loadFFmpeg();
+  if (!ffmpeg) throw new Error('FFmpeg not loaded');
+
+  const { clips, outputFormat = 'mp4' } = options;
+  if (!clips || clips.length === 0) {
+    throw new Error('No clips in sequence to export');
+  }
+
+  const outputDir = getVideoOutputDir();
+  const ext = outputFormat || 'mp4';
+  const outputPath = path.join(outputDir, `auvid_seq_${Date.now()}.${ext}`);
+  const exportId = `seq_${Date.now()}`;
+
+  const totalDuration = clips.reduce((acc, c) => acc + Math.max(0.1, c.outPoint - c.inPoint), 0);
+
+  return new Promise((resolve, reject) => {
+    let cmd = ffmpeg();
+
+    clips.forEach((clip) => {
+      const dur = Math.max(0.1, clip.outPoint - clip.inPoint);
+      cmd = cmd.input(clip.filePath).seekInput(clip.inPoint).duration(dur);
+    });
+
+    const filterLines: string[] = [];
+    clips.forEach((_, idx) => {
+      filterLines.push(
+        `[${idx}:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1[v${idx}]`
+      );
+    });
+
+    const concatInputs = clips.map((_, idx) => `[v${idx}][${idx}:a]`).join('');
+    filterLines.push(`${concatInputs}concat=n=${clips.length}:v=1:a=1[vout][aout]`);
+
+    cmd = cmd.complexFilter(filterLines, ['vout', 'aout']);
+
+    cmd
+      .output(outputPath)
+      .on('start', (cmdLine: string) => {
+        console.log('[VideoEditor] Sequence FFmpeg command:', cmdLine);
+        activeExports.set(exportId, cmd);
+        if (onProgress) onProgress(0);
+      })
+      .on('progress', (progress: { percent?: number; timemark?: string }) => {
+        let pct = progress.percent;
+        if (pct === undefined || isNaN(pct) || pct <= 0) {
+          if (progress.timemark) {
+            const parts = progress.timemark.split(':');
+            if (parts.length >= 3) {
+              const secs =
+                parseFloat(parts[0]) * 3600 +
+                parseFloat(parts[1]) * 60 +
+                parseFloat(parts[2]);
+              pct = Math.round((secs / totalDuration) * 100);
+            }
+          }
+        }
+        if (pct !== undefined && !isNaN(pct)) {
+          const clamped = Math.min(99, Math.max(1, Math.round(pct)));
+          if (onProgress) onProgress(clamped);
+        }
+      })
+      .on('end', () => {
+        activeExports.delete(exportId);
+        if (onProgress) onProgress(100);
+        const stats = fs.existsSync(outputPath) ? fs.statSync(outputPath) : undefined;
+        resolve({
+          outputPath,
+          newSize: stats?.size,
+        });
+      })
+      .on('error', (err: Error) => {
+        activeExports.delete(exportId);
+        reject(err);
+      })
+      .run();
+  });
+}
+
 // ─── Extract Audio from Video ─────────────────────────────────────────────────
 export interface ExtractAudioOptions {
   inputPath: string;
@@ -443,9 +645,10 @@ export async function extractAudioFromVideo(
   const outputPath = path.join(outputDir, `${baseName}_audio.${format}`);
   const exportId = `audio_extract_${Date.now()}`;
 
-  const targetLength = (outPoint && inPoint && outPoint > inPoint)
-    ? outPoint - inPoint
-    : info.duration;
+  const targetLength =
+    outPoint !== undefined && inPoint !== undefined && outPoint > inPoint
+      ? outPoint - inPoint
+      : info.duration;
 
   return new Promise((resolve, reject) => {
     let cmd = ffmpeg(inputPath).noVideo();
@@ -540,6 +743,21 @@ export async function registerVideoEditorHandlers() {
     }
   });
 
+  // ── video:export-sequence ───────────────────────────────────────────────────
+  ipcMain.handle('video:export-sequence', async (event, options: SequenceExportOptions) => {
+    try {
+      const result = await exportVideoSequence(options, (percent: number) => {
+        try {
+          event.sender.send('video:progress', { percent });
+        } catch (_) {}
+      });
+      return result;
+    } catch (err) {
+      console.error('[VideoEditor] video:export-sequence error:', err);
+      throw err;
+    }
+  });
+
   // ── video:extract-audio ────────────────────────────────────────────────────
   ipcMain.handle('video:extract-audio', async (event, options: ExtractAudioOptions) => {
     try {
@@ -610,6 +828,7 @@ export function cleanupVideoEditor() {
     'video:get-info',
     'video:get-thumbnails',
     'video:export',
+    'video:export-sequence',
     'video:extract-audio',
     'video:cancel',
     'dialog:open-video-file',
