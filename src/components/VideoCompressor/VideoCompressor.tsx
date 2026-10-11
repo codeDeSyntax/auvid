@@ -211,78 +211,80 @@ export const VideoCompressor: React.FC = () => {
           /* ── Loaded Queue Studio Layout ── */
           <>
             {/* Left Main Queue Area */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden p-6 space-y-4">
-              {/* Queue Header Bar */}
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800/80">
-                <div className="flex items-center space-x-3">
-                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                    Queue ({files.length} {files.length === 1 ? 'video' : 'videos'})
-                  </span>
-                  <span className="text-xs font-mono text-zinc-400">
-                    Total: {formatBytes(totalOriginalSize)}
-                  </span>
-                </div>
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden p-6">
+              <div className="w-full max-w-4xl mx-auto flex-1 flex flex-col min-h-0 space-y-4">
+                {/* Queue Header Bar */}
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800/80">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                      Queue ({files.length} {files.length === 1 ? 'video' : 'videos'})
+                    </span>
+                    <span className="text-xs font-mono text-zinc-400">
+                      Total: {formatBytes(totalOriginalSize)}
+                    </span>
+                  </div>
 
-                <div className="flex items-center space-x-2">
-                  {completedCount > 0 && (
+                  <div className="flex items-center space-x-2">
+                    {completedCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearCompleted}
+                        className="text-xs font-bold text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+                      >
+                        Clear Completed
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={clearCompleted}
-                      className="text-xs font-bold text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+                      onClick={clearAll}
+                      disabled={isProcessing}
+                      className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors cursor-pointer disabled:opacity-40"
                     >
-                      Clear Completed
+                      Clear All
                     </button>
-                  )}
+                  </div>
+                </div>
+
+                {/* Scrollable Video File Rows */}
+                <div className="flex-1 overflow-y-auto no-scrollbar space-y-2.5 pr-1">
+                  {files.map((file) => (
+                    <VideoFileRow
+                      key={file.id}
+                      entry={file}
+                      globalSettings={settings}
+                      onRemove={removeFile}
+                      onCompressSingle={handleOpenSingleConfirm}
+                      accentColor={accentColor}
+                    />
+                  ))}
+                </div>
+
+                {/* Bottom Action Bar */}
+                <div className="pt-3 border-t border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {pendingCount > 0 ? `${pendingCount} videos pending compression` : 'All videos completed!'}
+                  </div>
+
                   <button
                     type="button"
-                    onClick={clearAll}
-                    disabled={isProcessing}
-                    className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors cursor-pointer disabled:opacity-40"
+                    onClick={handleOpenBatchConfirm}
+                    disabled={isProcessing || pendingCount === 0}
+                    style={{ backgroundColor: accentColor }}
+                    className="px-6 py-3 rounded-xl text-xs font-black text-black shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center space-x-2 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                   >
-                    Clear All
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin fill-black" />
+                        <span>Compressing Queue…</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 fill-black" />
+                        <span>Compress All ({pendingCount})</span>
+                      </>
+                    )}
                   </button>
                 </div>
-              </div>
-
-              {/* Scrollable Video File Rows */}
-              <div className="flex-1 overflow-y-auto no-scrollbar space-y-2.5 pr-1">
-                {files.map((file) => (
-                  <VideoFileRow
-                    key={file.id}
-                    entry={file}
-                    globalSettings={settings}
-                    onRemove={removeFile}
-                    onCompressSingle={handleOpenSingleConfirm}
-                    accentColor={accentColor}
-                  />
-                ))}
-              </div>
-
-              {/* Bottom Action Bar */}
-              <div className="pt-3 border-t border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
-                <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {pendingCount > 0 ? `${pendingCount} videos pending compression` : 'All videos completed!'}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleOpenBatchConfirm}
-                  disabled={isProcessing || pendingCount === 0}
-                  style={{ backgroundColor: accentColor }}
-                  className="px-6 py-3 rounded-xl text-xs font-black text-black shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center space-x-2 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin fill-black" />
-                      <span>Compressing Queue…</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 fill-black" />
-                      <span>Compress All ({pendingCount})</span>
-                    </>
-                  )}
-                </button>
               </div>
             </div>
 

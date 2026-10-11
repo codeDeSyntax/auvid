@@ -180,8 +180,8 @@ export const AuvidWorkspace: React.FC = () => {
   /* ─────────────────────────── Dashboard ─────────────────────────── */
   const Dashboard = (
     <div className="flex-1 flex flex-col overflow-hidden no-scrollbar relative">
-      {/* Top greeting banner with upload button & storage folder in header area */}
-      <div className="px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 pb-2 sm:pb-3 shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 relative z-10">
+      {/* Top greeting banner with upload button & storage folder in header area (Full Width) */}
+      <div className="w-full px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 pb-2 sm:pb-3 shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 relative z-10 border-b border-zinc-200/50 dark:border-zinc-800/40">
         <div>
           <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wider mb-1 border border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md shadow-xs">
             <span className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full animate-pulse" style={{ backgroundColor: accentColor }} />
@@ -216,30 +216,30 @@ export const AuvidWorkspace: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Studio Suites Grid (Fully Responsive Layout) ── */}
-      <div className="flex-1 min-h-0 px-4 sm:px-6 md:px-8 pb-4 sm:pb-6 flex flex-col gap-2.5 sm:gap-3.5 overflow-hidden relative z-10">
-        <div className="flex items-center justify-between shrink-0">
-          <h2 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            Studio Suites ({TOOLS.length} Available)
-          </h2>
-        </div>
+      {/* ── Studio Suites Grid Area (Centered in Max-W-3XL) ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-4 sm:px-6 py-4 flex flex-col items-center">
+        <div className="w-full max-w-3xl flex flex-col gap-2.5 sm:gap-3 my-auto">
+          <div className="flex items-center justify-between shrink-0">
+            <h2 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Studio Suites ({TOOLS.length} Available)
+            </h2>
+          </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar pb-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-4.5 h-full auto-rows-fr">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
             {TOOLS.map((tool) => (
               <button
                 key={tool.key}
                 onClick={() => setActiveTool(tool.key)}
-                className="group relative p-3 sm:p-4 md:p-4.5 rounded-2xl sm:rounded-3xl
+                className="group relative p-3 sm:p-3.5 rounded-2xl sm:rounded-3xl
                            bg-white/90 dark:bg-zinc-800/40 backdrop-blur-xl
                            border border-zinc-200/80 dark:border-zinc-700/60
                            hover:border-cyan-400/60 dark:hover:border-cyan-500/50
-                           shadow-xs hover:shadow-xl hover:shadow-cyan-500/5
+                           shadow-xs hover:shadow-lg hover:shadow-cyan-500/5
                            transition-all duration-300 hover:-translate-y-0.5
-                           text-left cursor-pointer flex flex-row items-center gap-3 sm:gap-4 md:gap-5 w-full overflow-hidden"
+                           text-left cursor-pointer flex flex-row items-center gap-3 sm:gap-3.5 w-full overflow-hidden"
               >
-                {/* Left Inset Fixed Thumbnail Frame with Padding from Card Edges */}
-                <div className="w-20 h-16 sm:w-28 sm:h-20 md:w-36 md:h-24 shrink-0 rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-800/80 relative border border-zinc-200/60 dark:border-zinc-700/60 flex items-center justify-center shadow-xs">
+                {/* Thumbnail Frame (Slightly larger) */}
+                <div className="w-16 h-14 sm:w-20 sm:h-16 md:w-22 md:h-18 shrink-0 rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-800/80 relative border border-zinc-200/60 dark:border-zinc-700/60 flex items-center justify-center shadow-xs">
                   <img
                     src={isDarkMode ? tool.imageDark : tool.imageLight}
                     alt={tool.title}
@@ -257,10 +257,10 @@ export const AuvidWorkspace: React.FC = () => {
                   )}
                 </div>
 
-                {/* Right Content Area (Strict overflow prevention) */}
-                <div className="flex-1 min-w-0 overflow-hidden flex flex-col justify-center py-0.5">
+                {/* Right Content Area */}
+                <div className="flex-1 min-w-0 overflow-hidden flex flex-col justify-center">
                   <div className="flex items-center justify-between gap-1.5 sm:gap-2">
-                    <h3 className="text-xs sm:text-sm md:text-base font-black text-zinc-900 dark:text-zinc-50 tracking-tight group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors truncate">
+                    <h3 className="text-xs sm:text-sm font-black text-zinc-900 dark:text-zinc-50 tracking-tight group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors truncate">
                       {tool.title}
                     </h3>
                     <ArrowRightOutlined
@@ -276,10 +276,10 @@ export const AuvidWorkspace: React.FC = () => {
                   {/* Feature Tags / Highlights */}
                   {tool.tags && tool.tags.length > 0 && (
                     <div className="hidden sm:flex items-center gap-1.5 mt-1.5 sm:mt-2 overflow-hidden flex-nowrap">
-                      {tool.tags.map((tag) => (
+                      {tool.tags.slice(0, 3).map((tag) => (
                         <span
                           key={tag}
-                          className="px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-bold bg-zinc-100/90 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300 border border-zinc-200/60 dark:border-zinc-700/40 shrink-0 truncate max-w-[110px]"
+                          className="px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-bold bg-zinc-100/90 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300 border border-zinc-200/60 dark:border-zinc-700/40 shrink-0 truncate max-w-[100px]"
                         >
                           {tag}
                         </span>

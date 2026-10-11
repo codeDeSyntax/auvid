@@ -1,5 +1,6 @@
 // ─── Audio Settings Panel ─────────────────────────────────────────────────────
 // Right-side panel with compression controls. Reused for per-file & global modes.
+// Streamlined with sleek CustomDropdowns and compact, clean controls.
 
 import React from 'react';
 import {
@@ -7,7 +8,6 @@ import {
   AudioFormat,
   CompressionMode,
   BitrateMode,
-  SUPPORTED_FORMATS,
   BITRATE_PRESETS,
   SAMPLE_RATE_OPTIONS,
   SampleRate,
@@ -16,17 +16,24 @@ import {
 import { CustomDropdown, DropdownOption } from '@/components/common/CustomDropdown';
 
 const FORMAT_OPTIONS: DropdownOption<AudioFormat>[] = [
-  { value: 'mp3', label: 'MP3 Audio (.mp3)', badge: 'Compatible' },
+  { value: 'mp3', label: 'MP3 Audio (.mp3)', badge: 'Universal' },
   { value: 'aac', label: 'AAC Audio (.aac)', badge: 'Apple / Web' },
   { value: 'm4a', label: 'M4A Audio (.m4a)', badge: 'MPEG-4' },
   { value: 'flac', label: 'FLAC Lossless (.flac)', badge: 'Lossless' },
   { value: 'wav', label: 'WAV Audio (.wav)', badge: 'Raw PCM' },
   { value: 'opus', label: 'Opus Audio (.opus)', badge: 'Ultra Efficient' },
-  { value: 'ogg', label: 'Ogg Vorbis (.ogg)' },
+  { value: 'ogg', label: 'Ogg Vorbis (.ogg)', badge: 'Ogg' },
   { value: 'alac', label: 'Apple Lossless (.alac)', badge: 'Lossless' },
-  { value: 'aiff', label: 'AIFF Audio (.aiff)' },
-  { value: 'wma', label: 'Windows Media (.wma)' },
-  { value: 'ac3', label: 'Dolby Digital (.ac3)' },
+  { value: 'aiff', label: 'AIFF Audio (.aiff)', badge: 'Uncompressed' },
+  { value: 'wma', label: 'Windows Media (.wma)', badge: 'WMA' },
+  { value: 'ac3', label: 'Dolby Digital (.ac3)', badge: 'Surround' },
+];
+
+const MODES: { value: CompressionMode; label: string; badge: string; desc: string }[] = [
+  { value: 'percentage', label: 'Target %', badge: 'Smart %', desc: 'Compress to a percentage of original size' },
+  { value: 'quality', label: 'Quality', badge: 'VBR Level', desc: 'Perceptual adaptive audio quality' },
+  { value: 'targetSize', label: 'Size (MB)', badge: 'Exact Size', desc: 'Target exact output file size in MB' },
+  { value: 'bitrate', label: 'Bitrate', badge: 'Manual kbps', desc: 'Directly set audio bitrate' },
 ];
 
 const BITRATE_OPTIONS: DropdownOption<number>[] = BITRATE_PRESETS.map(b => ({
@@ -35,11 +42,22 @@ const BITRATE_OPTIONS: DropdownOption<number>[] = BITRATE_PRESETS.map(b => ({
   badge: b >= 256 ? 'High' : b >= 128 ? 'Standard' : 'Compact',
 }));
 
+const BITRATE_MODES: { value: BitrateMode; label: string; badge: string; sublabel: string }[] = [
+  { value: 'vbr', label: 'Variable Bitrate (VBR)', badge: 'Recommended', sublabel: 'Adaptive bitrate based on audio complexity' },
+  { value: 'cbr', label: 'Constant Bitrate (CBR)', badge: 'Fixed', sublabel: 'Uniform bitrate throughout entire track' },
+];
+
 const SAMPLE_RATE_DROPDOWN_OPTIONS: DropdownOption<SampleRate | null>[] = SAMPLE_RATE_OPTIONS.map(opt => ({
   value: opt.value,
   label: opt.label,
+  badge: opt.value === null ? 'Original' : `${(opt.value / 1000).toFixed(1)} kHz`,
 }));
 
+const AUDIO_CHANNELS: { value: 'stereo' | 'mono' | null; label: string; badge: string; sublabel: string }[] = [
+  { value: null, label: 'Original Channels', badge: 'Auto', sublabel: 'Keep source channel configuration' },
+  { value: 'stereo', label: 'Stereo (2.0)', badge: '2 Channels', sublabel: 'Standard left/right channel audio' },
+  { value: 'mono', label: 'Mono (1.0)', badge: '1 Channel', sublabel: 'Downmix to single channel for size reduction' },
+];
 
 interface AudioSettingsPanelProps {
   selectedFile?: AudioFileEntry | null;
@@ -54,17 +72,6 @@ interface AudioSettingsPanelProps {
 }
 
 const labelClass = 'block text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5';
-const selectClass =
-  'w-full bg-zinc-100 dark:bg-zinc-800/90 border border-zinc-300 dark:border-zinc-700/80 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-accent/50 transition-colors appearance-none cursor-pointer font-medium';
-const inputClass =
-  'w-full bg-zinc-100 dark:bg-zinc-800/90 border border-zinc-300 dark:border-zinc-700/80 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-accent/50 transition-colors font-medium';
-
-const MODES: { value: CompressionMode; label: string; desc: string }[] = [
-  { value: 'percentage', label: 'Target %', desc: 'Compress to a percentage of original size (e.g. 20% makes 100MB into 20MB)' },
-  { value: 'quality', label: 'Quality', desc: 'Perceptual quality slider (VBR/smart encoding)' },
-  { value: 'targetSize', label: 'Target Size', desc: 'Back-calculate bitrate from desired file size' },
-  { value: 'bitrate', label: 'Bitrate', desc: 'Exact target bitrate (CBR or VBR)' },
-];
 
 export const AudioSettingsPanel: React.FC<AudioSettingsPanelProps> = ({
   selectedFile,
@@ -87,7 +94,7 @@ export const AudioSettingsPanel: React.FC<AudioSettingsPanelProps> = ({
         {onToggleCustom && (
           <button
             onClick={onToggleCustom}
-            className={`text-[10px] font-bold px-2.5 py-1 rounded-md transition-colors ${
+            className={`text-[10px] font-bold px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
               isCustom
                 ? 'border'
                 : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700/60 hover:text-zinc-900 dark:hover:text-zinc-200'
@@ -107,7 +114,7 @@ export const AudioSettingsPanel: React.FC<AudioSettingsPanelProps> = ({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-4 space-y-5">
+      <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-4 space-y-4">
         {/* Output Format Custom Dropdown */}
         <CustomDropdown<AudioFormat>
           label="Output Format"
@@ -116,48 +123,55 @@ export const AudioSettingsPanel: React.FC<AudioSettingsPanelProps> = ({
           onChange={fmt => onChange({ outputFormat: fmt })}
         />
 
-        {/* Compression Mode */}
+        {/* Compression Mode Segmented Bar */}
         <div>
-          <label className={labelClass}>Compression Mode</label>
-          <div className="grid grid-cols-2 gap-1.5">
-            {MODES.map(m => (
-              <button
-                key={m.value}
-                onClick={() => onChange({ mode: m.value })}
-                title={m.desc}
-                className={`px-2 py-2 rounded-xl text-[11px] font-bold transition-all border ${
-                  settings.mode === m.value
-                    ? 'shadow-sm'
-                    : 'bg-zinc-100 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700/60 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800'
-                }`}
-                style={
-                  settings.mode === m.value
-                    ? {
-                        backgroundColor: 'color-mix(in srgb, var(--accent) 22%, transparent)',
-                        color: 'var(--accent)',
-                        borderColor: 'color-mix(in srgb, var(--accent) 50%, transparent)',
-                      }
-                    : undefined
-                }
-              >
-                {m.label}
-              </button>
-            ))}
+          <div className="flex items-center justify-between mb-1.5">
+            <label className={labelClass}>Compression Mode</label>
+            <span className="text-[10px] font-bold text-zinc-400">
+              {MODES.find(m => m.value === settings.mode)?.badge}
+            </span>
+          </div>
+          <div className="p-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-2xl flex items-center gap-1 border border-zinc-200/80 dark:border-zinc-700/60 shadow-xs">
+            {MODES.map(m => {
+              const isSelected = settings.mode === m.value;
+              return (
+                <button
+                  key={m.value}
+                  type="button"
+                  onClick={() => onChange({ mode: m.value })}
+                  title={m.desc}
+                  className={`flex-1 py-1.5 px-1 rounded-xl text-[11px] font-bold text-center transition-all cursor-pointer truncate ${
+                    isSelected
+                      ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs border border-zinc-200/60 dark:border-zinc-700/60'
+                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                  }`}
+                  style={
+                    isSelected
+                      ? { color: 'var(--accent)' }
+                      : undefined
+                  }
+                >
+                  {m.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Mode-specific controls */}
         {settings.mode === 'quality' && (
-          <div>
-            <label className={labelClass}>
-              Quality Level
-              <span className="ml-2 font-bold text-sm normal-case text-zinc-900 dark:text-cyan-400">
-                {settings.qualityLevel}
+          <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/80 dark:border-zinc-700/60 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                Quality Level
+              </label>
+              <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100">
+                {settings.qualityLevel} / 10
               </span>
-              <span className="text-zinc-400 text-[10px] ml-1">/ 10</span>
-            </label>
+            </div>
+
             <div className="flex items-center space-x-2">
-              <span className="text-[10px] text-zinc-400 w-10 text-right shrink-0">Smallest</span>
+              <span className="text-[10px] text-zinc-400 w-11 text-left shrink-0 font-medium">Smallest</span>
               <input
                 type="range"
                 min={1}
@@ -168,34 +182,47 @@ export const AudioSettingsPanel: React.FC<AudioSettingsPanelProps> = ({
                 className="flex-1 h-1.5 appearance-none rounded-full outline-none cursor-pointer"
                 style={{ accentColor: 'var(--accent)' }}
               />
-              <span className="text-[10px] text-zinc-400 w-10 shrink-0">Best</span>
+              <span className="text-[10px] text-zinc-400 w-11 text-right shrink-0 font-medium">Best</span>
             </div>
-            {/* VBR/CBR toggle for mp3 */}
+
+            {/* VBR/CBR vertical list for mp3 */}
             {settings.outputFormat === 'mp3' && (
-              <div className="mt-3">
+              <div className="pt-2 border-t border-zinc-200/80 dark:border-zinc-700/60">
                 <label className={labelClass}>Bitrate Mode</label>
-                <div className="flex rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700/60">
-                  {(['vbr', 'cbr'] as BitrateMode[]).map(bm => (
-                    <button
-                      key={bm}
-                      onClick={() => onChange({ bitrateMode: bm })}
-                      className={`flex-1 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors ${
-                        settings.bitrateMode === bm
-                          ? ''
-                          : 'bg-zinc-100 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
-                      }`}
-                      style={
-                        settings.bitrateMode === bm
-                          ? {
-                              backgroundColor: 'color-mix(in srgb, var(--accent) 25%, transparent)',
-                              color: 'var(--accent)',
-                            }
-                          : undefined
-                      }
-                    >
-                      {bm}
-                    </button>
-                  ))}
+                <div className="flex flex-col gap-[1px]">
+                  {BITRATE_MODES.map((bm) => {
+                    const isSelected = settings.bitrateMode === bm.value;
+                    return (
+                      <button
+                        key={bm.value}
+                        type="button"
+                        onClick={() => onChange({ bitrateMode: bm.value })}
+                        className={`w-full px-2.5 py-1.5 text-left flex flex-col items-start gap-0.5 transition-colors cursor-pointer border-b border-solid border-zinc-200/80 dark:border-zinc-700/60 ${
+                          isSelected
+                            ? 'bg-zinc-100/90 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold'
+                            : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/40 text-zinc-600 dark:text-zinc-400 font-medium'
+                        }`}
+                      >
+                        <span className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 leading-tight">
+                          {bm.label}
+                        </span>
+                        <div className="flex items-center gap-1.5 w-full">
+                          <span
+                            className={`text-[9px] font-mono font-bold uppercase px-1 py-0.2 tracking-wider ${
+                              isSelected
+                                ? 'bg-zinc-900 text-white dark:bg-cyan-500 dark:text-black'
+                                : 'bg-zinc-200/80 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'
+                            }`}
+                          >
+                            {bm.badge}
+                          </span>
+                          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate leading-tight">
+                            {bm.sublabel}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -212,46 +239,61 @@ export const AudioSettingsPanel: React.FC<AudioSettingsPanelProps> = ({
               onChange={b => onChange({ bitrate: b })}
             />
 
+            {/* Bitrate Mode Vertical List */}
             <div>
               <label className={labelClass}>Bitrate Mode</label>
-              <div className="flex rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700/60">
-                {(['cbr', 'vbr'] as BitrateMode[]).map(bm => (
-                  <button
-                    key={bm}
-                    onClick={() => onChange({ bitrateMode: bm })}
-                    className={`flex-1 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors ${
-                      settings.bitrateMode === bm
-                        ? ''
-                        : 'bg-zinc-100 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
-                    }`}
-                    style={
-                      settings.bitrateMode === bm
-                        ? {
-                            backgroundColor: 'color-mix(in srgb, var(--accent) 25%, transparent)',
-                            color: 'var(--accent)',
-                          }
-                        : undefined
-                    }
-                  >
-                    {bm}
-                  </button>
-                ))}
+              <div className="flex flex-col gap-[1px]">
+                {BITRATE_MODES.map((bm) => {
+                  const isSelected = settings.bitrateMode === bm.value;
+                  return (
+                    <button
+                      key={bm.value}
+                      type="button"
+                      onClick={() => onChange({ bitrateMode: bm.value })}
+                      className={`w-full px-2.5 py-1.5 text-left flex flex-col items-start gap-0.5 transition-colors cursor-pointer border-b border-solid border-zinc-200/80 dark:border-zinc-700/60 ${
+                        isSelected
+                          ? 'bg-zinc-100/90 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold'
+                          : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/40 text-zinc-600 dark:text-zinc-400 font-medium'
+                      }`}
+                    >
+                      <span className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 leading-tight">
+                        {bm.label}
+                      </span>
+                      <div className="flex items-center gap-1.5 w-full">
+                        <span
+                          className={`text-[9px] font-mono font-bold uppercase px-1 py-0.2 tracking-wider ${
+                            isSelected
+                              ? 'bg-zinc-900 text-white dark:bg-cyan-500 dark:text-black'
+                              : 'bg-zinc-200/80 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'
+                          }`}
+                        >
+                          {bm.badge}
+                        </span>
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate leading-tight">
+                          {bm.sublabel}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
         )}
 
         {settings.mode === 'targetSize' && (
-          <div>
-            <label className={labelClass}>
-              Target File Size
-              <span className="ml-2 font-bold text-sm normal-case text-zinc-900 dark:text-cyan-400">
-                {settings.targetSizeMB}
+          <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/80 dark:border-zinc-700/60 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                Target File Size
+              </label>
+              <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100">
+                {settings.targetSizeMB} MB
               </span>
-              <span className="text-zinc-400 text-[10px] ml-1">MB</span>
-            </label>
+            </div>
+
             <div className="flex items-center space-x-2">
-              <span className="text-[10px] text-zinc-400 w-8 text-right shrink-0">0.5</span>
+              <span className="text-[10px] text-zinc-400 w-8 text-left shrink-0 font-medium">0.5</span>
               <input
                 type="range"
                 min={0.5}
@@ -262,7 +304,7 @@ export const AudioSettingsPanel: React.FC<AudioSettingsPanelProps> = ({
                 className="flex-1 h-1.5 appearance-none rounded-full cursor-pointer"
                 style={{ accentColor: 'var(--accent)' }}
               />
-              <span className="text-[10px] text-zinc-400 w-10 shrink-0">50 MB</span>
+              <span className="text-[10px] text-zinc-400 w-10 text-right shrink-0 font-medium">50 MB</span>
             </div>
           </div>
         )}
@@ -297,16 +339,16 @@ export const AudioSettingsPanel: React.FC<AudioSettingsPanelProps> = ({
                 <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 w-7 shrink-0 text-right">95%</span>
               </div>
 
-              {/* Quick Preset Buttons */}
-              <div className="flex items-center justify-between gap-1 pt-1">
-                {[10, 20, 30, 50, 70, 80].map(pct => (
+              {/* Quick Preset Chips */}
+              <div className="flex items-center justify-between gap-1 pt-0.5">
+                {[10, 25, 50, 75].map(pct => (
                   <button
                     key={pct}
                     type="button"
                     onClick={() => onChange({ percentageReduction: pct })}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
                       settings.percentageReduction === pct
-                        ? 'bg-zinc-900 text-white dark:bg-cyan-500 dark:text-black shadow-xs scale-105'
+                        ? 'bg-zinc-900 text-white dark:bg-cyan-500 dark:text-black shadow-xs'
                         : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700/60'
                     }`}
                   >
@@ -339,52 +381,55 @@ export const AudioSettingsPanel: React.FC<AudioSettingsPanelProps> = ({
                 </div>
               </div>
             )}
-            <p className="text-[10px] text-zinc-400 leading-tight">
-              Output will be {settings.percentageReduction}% of the original file size (e.g. 100 MB → {(100 * (settings.percentageReduction / 100)).toFixed(1)} MB).
-            </p>
           </div>
         )}
 
-        {/* Divider */}
-        <div className="border-t border-zinc-200 dark:border-zinc-800" />
-
-        {/* Custom Sample Rate Dropdown */}
+        {/* Custom Sample Rate Dropdown (opens upwards) */}
         <CustomDropdown<SampleRate | null>
           label="Sample Rate"
           value={settings.sampleRate}
           options={SAMPLE_RATE_DROPDOWN_OPTIONS}
           onChange={sr => onChange({ sampleRate: sr })}
+          placement="top"
         />
 
-        {/* Channels */}
+        {/* Audio Channels Vertical List */}
         <div>
           <label className={labelClass}>Audio Channels</label>
-          <div className="flex rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700/60">
-            {[
-              { value: null, label: 'Original' },
-              { value: 'stereo', label: 'Stereo' },
-              { value: 'mono', label: 'Mono' },
-            ].map(opt => (
-              <button
-                key={String(opt.value)}
-                onClick={() => onChange({ channels: opt.value as 'stereo' | 'mono' | null })}
-                className={`flex-1 py-1.5 text-[11px] font-bold transition-colors ${
-                  settings.channels === opt.value
-                    ? ''
-                    : 'bg-zinc-100 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
-                }`}
-                style={
-                  settings.channels === opt.value
-                    ? {
-                        backgroundColor: 'color-mix(in srgb, var(--accent) 25%, transparent)',
-                        color: 'var(--accent)',
-                      }
-                    : undefined
-                }
-              >
-                {opt.label}
-              </button>
-            ))}
+          <div className="flex flex-col gap-[1px]">
+            {AUDIO_CHANNELS.map((ch) => {
+              const isSelected = settings.channels === ch.value;
+              return (
+                <button
+                  key={String(ch.value)}
+                  type="button"
+                  onClick={() => onChange({ channels: ch.value })}
+                  className={`w-full px-2.5 py-1.5 text-left flex flex-col items-start gap-0.5 transition-colors cursor-pointer border-b border-solid border-zinc-200/80 dark:border-zinc-700/60 ${
+                    isSelected
+                      ? 'bg-zinc-100/90 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold'
+                      : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/40 text-zinc-600 dark:text-zinc-400 font-medium'
+                  }`}
+                >
+                  <span className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 leading-tight">
+                    {ch.label}
+                  </span>
+                  <div className="flex items-center gap-1.5 w-full">
+                    <span
+                      className={`text-[9px] font-mono font-bold uppercase px-1 py-0.2 tracking-wider ${
+                        isSelected
+                          ? 'bg-zinc-900 text-white dark:bg-cyan-500 dark:text-black'
+                          : 'bg-zinc-200/80 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'
+                      }`}
+                    >
+                      {ch.badge}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate leading-tight">
+                      {ch.sublabel}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 

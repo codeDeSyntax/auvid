@@ -236,16 +236,13 @@ async function compressFile(
     probedBitrate = 128,
   } = options;
 
-  // Build output path — outputs to staging directory so user can preview & compare before manually saving
+  // Build output path — ALWAYS outputs to isolated temp staging directory so the user's permanent output folder is never polluted with preview files
   const stagingDir = getStagingDir();
-  const resolvedOutputDir = outputDir && outputDir.trim() && outputDir !== 'staging'
-    ? outputDir
-    : stagingDir;
   const baseName = path.basename(inputPath, path.extname(inputPath));
-  const outputPath = path.join(resolvedOutputDir, `${baseName}_preview_${fileId.slice(0, 6)}.${outputFormat}`);
+  const outputPath = path.join(stagingDir, `${baseName}_staged_${fileId.slice(0, 6)}.${outputFormat}`);
 
-  // Ensure output dir exists
-  fs.mkdirSync(resolvedOutputDir, { recursive: true });
+  // Ensure staging dir exists
+  fs.mkdirSync(stagingDir, { recursive: true });
 
   // Determine effective bitrate
   let effectiveBitrate = bitrate;
@@ -508,6 +505,17 @@ export function registerAudioCompressorHandlers(getWindow: () => BrowserWindow |
       }
 
       fs.copyFileSync(stagedPath, finalPath);
+
+      // Clean up any legacy preview files that might have been left in targetDir
+      try {
+        const files = fs.readdirSync(targetDir);
+        for (const f of files) {
+          if (f.startsWith(`${baseName}_preview_`) || f.startsWith(`${baseName}_staged_`)) {
+            try { fs.unlinkSync(path.join(targetDir, f)); } catch (_) {}
+          }
+        }
+      } catch (_) {}
+
       return { success: true, savedPath: finalPath };
     } catch (err) {
       return { error: String(err) };
@@ -572,6 +580,17 @@ export function registerAudioCompressorHandlers(getWindow: () => BrowserWindow |
           finalPath = path.join(targetDir, `${baseName}_compressed_${Date.now().toString().slice(-4)}.${item.format}`);
         }
         fs.copyFileSync(item.stagedPath, finalPath);
+
+        // Clean up legacy preview files in targetDir
+        try {
+          const files = fs.readdirSync(targetDir);
+          for (const f of files) {
+            if (f.startsWith(`${baseName}_preview_`) || f.startsWith(`${baseName}_staged_`)) {
+              try { fs.unlinkSync(path.join(targetDir, f)); } catch (_) {}
+            }
+          }
+        } catch (_) {}
+
         results.push({ fileId: item.fileId, savedPath: finalPath });
       }
     }
@@ -587,6 +606,17 @@ export function cleanupAudioCompressor() {
     try { job.kill('SIGKILL'); } catch (_) { /* ignore */ }
   }
   activeJobs.clear();
+
+  // Clean up temporary staging directory
+  try {
+    const stagingDir = getStagingDir();
+    if (fs.existsSync(stagingDir)) {
+      const files = fs.readdirSync(stagingDir);
+      for (const f of files) {
+        try { fs.unlinkSync(path.join(stagingDir, f)); } catch (_) {}
+      }
+    }
+  } catch (_) {}
 
   ipcMain.removeHandler('audio:probe');
   ipcMain.removeHandler('audio:compress');

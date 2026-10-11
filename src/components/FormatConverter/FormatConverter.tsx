@@ -226,104 +226,106 @@ export const FormatConverter: React.FC = () => {
           /* ── Loaded Queue Studio Layout ── */
           <>
             {/* Left Main Queue Area */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden p-6 space-y-4">
-              {/* Queue Header & Global Format Selector */}
-              <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800/80 gap-3 flex-wrap">
-                <div className="flex items-center space-x-3">
-                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                    Queue ({files.length} {files.length === 1 ? 'file' : 'files'})
-                  </span>
-                  <span className="text-xs font-mono text-zinc-400">
-                    Total: {formatBytes(totalOriginalSize)}
-                  </span>
-                </div>
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden p-6">
+              <div className="w-full max-w-4xl mx-auto flex-1 flex flex-col min-h-0 space-y-4">
+                {/* Queue Header & Global Format Selector */}
+                <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800/80 gap-3 flex-wrap">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                      Queue ({files.length} {files.length === 1 ? 'file' : 'files'})
+                    </span>
+                    <span className="text-xs font-mono text-zinc-400">
+                      Total: {formatBytes(totalOriginalSize)}
+                    </span>
+                  </div>
 
-                {/* Convert All To Pill */}
-                <div className="flex items-center space-x-2">
-                  <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
-                    Convert all to:
-                  </span>
-                  <select
-                    value={globalTargetFormat}
-                    onChange={e => setAllTargetFormats(e.target.value as TargetFormat)}
-                    className="px-3 py-1.5 text-xs font-mono font-bold uppercase bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xs cursor-pointer"
-                  >
-                    <optgroup label="Popular Audio">
-                      <option value="mp3">MP3</option>
-                      <option value="wav">WAV</option>
-                      <option value="flac">FLAC</option>
-                      <option value="aac">AAC</option>
-                      <option value="m4a">M4A</option>
-                      <option value="opus">OPUS</option>
-                    </optgroup>
-                    <optgroup label="Popular Video">
-                      <option value="mp4">MP4</option>
-                      <option value="mkv">MKV</option>
-                      <option value="mov">MOV</option>
-                      <option value="webm">WEBM</option>
-                      <option value="gif">GIF (Animated)</option>
-                    </optgroup>
-                  </select>
+                  {/* Convert All To Pill */}
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
+                      Convert all to:
+                    </span>
+                    <select
+                      value={globalTargetFormat}
+                      onChange={e => setAllTargetFormats(e.target.value as TargetFormat)}
+                      className="px-3 py-1.5 text-xs font-mono font-bold uppercase bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xs cursor-pointer"
+                    >
+                      <optgroup label="Popular Audio">
+                        <option value="mp3">MP3</option>
+                        <option value="wav">WAV</option>
+                        <option value="flac">FLAC</option>
+                        <option value="aac">AAC</option>
+                        <option value="m4a">M4A</option>
+                        <option value="opus">OPUS</option>
+                      </optgroup>
+                      <optgroup label="Popular Video">
+                        <option value="mp4">MP4</option>
+                        <option value="mkv">MKV</option>
+                        <option value="mov">MOV</option>
+                        <option value="webm">WEBM</option>
+                        <option value="gif">GIF (Animated)</option>
+                      </optgroup>
+                    </select>
 
-                  {completedCount > 0 && (
+                    {completedCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearCompleted}
+                        className="text-xs font-bold text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors cursor-pointer ml-2"
+                      >
+                        Clear Completed
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={clearCompleted}
-                      className="text-xs font-bold text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors cursor-pointer ml-2"
+                      onClick={clearAll}
+                      disabled={isProcessing}
+                      className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors cursor-pointer disabled:opacity-40"
                     >
-                      Clear Completed
+                      Clear All
                     </button>
-                  )}
+                  </div>
+                </div>
+
+                {/* Scrollable Converter File Rows */}
+                <div className="flex-1 overflow-y-auto no-scrollbar space-y-2.5 pr-1">
+                  {files.map((file) => (
+                    <ConverterFileRow
+                      key={file.id}
+                      entry={file}
+                      onRemove={removeFile}
+                      onFormatChange={updateFileFormat}
+                      onConvertSingle={handleOpenSingleConfirm}
+                      accentColor={accentColor}
+                    />
+                  ))}
+                </div>
+
+                {/* Bottom Action Bar */}
+                <div className="pt-3 border-t border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {pendingCount > 0 ? `${pendingCount} files ready for conversion` : 'All conversions finished!'}
+                  </div>
+
                   <button
                     type="button"
-                    onClick={clearAll}
-                    disabled={isProcessing}
-                    className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors cursor-pointer disabled:opacity-40"
+                    onClick={handleOpenBatchConfirm}
+                    disabled={isProcessing || pendingCount === 0}
+                    style={{ backgroundColor: accentColor }}
+                    className="px-6 py-3 rounded-xl text-xs font-black text-black shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center space-x-2 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                   >
-                    Clear All
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin fill-black" />
+                        <span>Converting Queue…</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 fill-black" />
+                        <span>Convert All ({pendingCount})</span>
+                      </>
+                    )}
                   </button>
                 </div>
-              </div>
-
-              {/* Scrollable Converter File Rows */}
-              <div className="flex-1 overflow-y-auto no-scrollbar space-y-2.5 pr-1">
-                {files.map((file) => (
-                  <ConverterFileRow
-                    key={file.id}
-                    entry={file}
-                    onRemove={removeFile}
-                    onFormatChange={updateFileFormat}
-                    onConvertSingle={handleOpenSingleConfirm}
-                    accentColor={accentColor}
-                  />
-                ))}
-              </div>
-
-              {/* Bottom Action Bar */}
-              <div className="pt-3 border-t border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
-                <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {pendingCount > 0 ? `${pendingCount} files ready for conversion` : 'All conversions finished!'}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleOpenBatchConfirm}
-                  disabled={isProcessing || pendingCount === 0}
-                  style={{ backgroundColor: accentColor }}
-                  className="px-6 py-3 rounded-xl text-xs font-black text-black shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center space-x-2 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin fill-black" />
-                      <span>Converting Queue…</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 fill-black" />
-                      <span>Convert All ({pendingCount})</span>
-                    </>
-                  )}
-                </button>
               </div>
             </div>
 
